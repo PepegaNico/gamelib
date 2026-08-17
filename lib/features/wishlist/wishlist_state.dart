@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/itad/itad_api_service.dart';
 import '../../core/itad/itad_credentials_store.dart';
+import '../../core/itad/itad_default_key.dart';
 import '../../core/itad/itad_models.dart';
 import '../../core/steam/steam_account.dart';
 import '../../core/steam/steam_store_api_service.dart';
@@ -45,7 +46,23 @@ class WishlistState extends ChangeNotifier {
   bool isLoading = false;
   String? errorMessage;
 
-  bool get isConnected => apiKey != null && apiKey!.isNotEmpty;
+  /// Whether the user personally connected their own ITAD key (drives the
+  /// "connected"/disconnect UI in Settings, and what Cloud-Sync/QR-export
+  /// actually shares with other devices — the shared build-time default
+  /// below is never synced, every device already has it built in).
+  bool get hasOwnKey => apiKey != null && apiKey!.isNotEmpty;
+
+  /// The key actually used for ITAD calls: the user's own if they connected
+  /// one, otherwise the shared key baked in at build time (if any) — see
+  /// ItadDefaultKey. Null when neither is available.
+  String? get effectiveApiKey {
+    if (hasOwnKey) return apiKey;
+    return ItadDefaultKey.isSet ? ItadDefaultKey.value : null;
+  }
+
+  /// Whether ITAD calls (price comparison, search) can be made at all,
+  /// through either the user's own key or the shared default.
+  bool get isConnected => effectiveApiKey != null;
 
   /// Entries whose best current price has dropped to or below the target
   /// the user set — this is the whole "price alert" mechanism, checked
@@ -77,11 +94,14 @@ class WishlistState extends ChangeNotifier {
     apiKey = null;
     priceCache = {};
     notifyListeners();
+    // The shared default key (if any) may still cover this — keep prices
+    // showing rather than blanking them out.
+    if (isConnected && entries.isNotEmpty) await refreshPrices();
   }
 
   Future<List<ItadGameMatch>> search(String title) async {
     if (!isConnected) return [];
-    return _apiService.search(apiKey!, title);
+    return _apiService.search(effectiveApiKey!, title);
   }
 
   Future<void> add(ItadGameMatch match) async {
@@ -117,6 +137,7 @@ class WishlistState extends ChangeNotifier {
             slug: e.slug,
             targetPriceAmount: amount,
             addedAt: e.addedAt,
+            steamAppId: e.steamAppId,
           )
         else
           e,
@@ -141,13 +162,14 @@ class WishlistState extends ChangeNotifier {
 
   /// Imports every game on the given Steam accounts' public wishlists that
   /// isn't already tracked here. Doesn't require IsThereAnyDeal — when it's
-  /// connected, each Steam appid is matched to its ITAD entry for cross-store
-  /// price comparison (Epic/GOG/etc., not just Steam); when it's not (or it
-  /// stops working partway through, e.g. an invalid key), games are added
-  /// with just their Steam name/appid instead of being blocked entirely.
-  /// Returns an error message on failure, or null on success (even if zero
-  /// new games were found) — a null return with entries added but no price
-  /// data means ITAD wasn't available for some or all of them.
+  /// available (own key or shared default), each Steam appid is matched to
+  /// its ITAD entry for cross-store price comparison (Epic/GOG/etc., not
+  /// just Steam); when it's not (or it stops working partway through, e.g.
+  /// an invalid key), games are added with just their Steam name/appid
+  /// instead of being blocked entirely. Returns an error message on
+  /// failure, or null on success (even if zero new games were found) — a
+  /// null return with entries added but no price data means ITAD wasn't
+  /// available for some or all of them.
   Future<String?> importFromSteam(List<SteamAccount> accounts) async {
     isLoading = true;
     errorMessage = null;
@@ -178,9 +200,9 @@ class WishlistState extends ChangeNotifier {
       notifyListeners();
 
       var added = 0;
-      // Starts true only if a key is actually set; flips to false for the
-      // rest of the run the moment a lookup fails (e.g. invalid key) so one
-      // broken ITAD connection doesn't abort the whole import.
+      // Starts true only if ITAD is actually available; flips to false for
+      // the rest of the run the moment a lookup fails (e.g. invalid key) so
+      // one broken ITAD connection doesn't abort the whole import.
       var itadAvailable = isConnected;
       String? itadWarning;
 
@@ -190,7 +212,10 @@ class WishlistState extends ChangeNotifier {
 
         if (itadAvailable) {
           try {
-            final match = await _apiService.lookupBySteamAppId(apiKey!, appId);
+            final match = await _apiService.lookupBySteamAppId(
+              effectiveApiKey!,
+              appId,
+            );
             if (match != null && !entries.any((e) => e.itadGameId == match.id)) {
               entries = [
                 ...entries,
@@ -200,6 +225,7 @@ class WishlistState extends ChangeNotifier {
                   slug: match.slug,
                   targetPriceAmount: null,
                   addedAt: DateTime.now(),
+                  steamAppId: appId,
                 ),
               ];
               added++;
@@ -224,6 +250,7 @@ class WishlistState extends ChangeNotifier {
             slug: '',
             targetPriceAmount: null,
             addedAt: DateTime.now(),
+            steamAppId: appId,
           ),
         ];
         added++;
@@ -259,7 +286,7 @@ class WishlistState extends ChangeNotifier {
           .toList();
       if (realIds.isEmpty) return;
 
-      priceCache = await _apiService.getPrices(apiKey!, realIds);
+      priceCache = await _apiService.getPrices(effectiveApiKey!, realIds);
     } catch (e) {
       errorMessage = 'Preise konnten nicht geladen werden: $e';
     } finally {

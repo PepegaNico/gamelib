@@ -115,6 +115,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
     unawaited(wishlist.refreshPrices());
+    if (auth.accounts.isNotEmpty) {
+      unawaited(wishlist.importFromSteam(auth.accounts));
+    }
   }
 
   List<LibraryGame> _applyFiltersAndSort(

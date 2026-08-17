@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -272,6 +273,7 @@ class _WishlistList extends StatelessWidget {
     final alerted = wishlist.alertedEntries.map((e) => e.itadGameId).toSet();
 
     return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       itemCount: wishlist.entries.length,
       itemBuilder: (context, index) {
         final entry = wishlist.entries[index];
@@ -279,50 +281,99 @@ class _WishlistList extends StatelessWidget {
         final isAlerted = alerted.contains(entry.itadGameId);
 
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          margin: const EdgeInsets.symmetric(vertical: 6),
           color: isAlerted
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
-          child: ListTile(
-            title: Text(entry.title),
-            subtitle: _PriceSubtitle(
-              price: price,
-              isLoading: wishlist.isLoading,
-            ),
-            leading: isAlerted
-                ? const Icon(Icons.notifications_active, color: Colors.orange)
-                : null,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (entry.targetPriceAmount != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Chip(
-                      label: Text(
-                        'Ziel: ${entry.targetPriceAmount!.toStringAsFixed(2)} €',
-                      ),
-                    ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 110,
+                    height: 52,
+                    child: entry.steamAppId != null
+                        ? CachedNetworkImage(
+                            imageUrl:
+                                'https://cdn.akamai.steamstatic.com/steam/apps/'
+                                '${entry.steamAppId}/header.jpg',
+                            fit: BoxFit.cover,
+                            errorWidget: (context, url, error) =>
+                                const _CoverPlaceholder(),
+                            placeholder: (context, url) => Container(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                            ),
+                          )
+                        : const _CoverPlaceholder(),
                   ),
-                IconButton(
-                  tooltip: 'Preisalarm setzen',
-                  icon: const Icon(Icons.notifications_outlined),
-                  onPressed: () => _editTargetPrice(context, entry),
                 ),
-                IconButton(
-                  tooltip: 'Entfernen',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () =>
-                      context.read<WishlistState>().remove(entry.itadGameId),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (isAlerted)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 6),
+                              child: Icon(
+                                Icons.notifications_active,
+                                color: Colors.orange,
+                                size: 18,
+                              ),
+                            ),
+                          Expanded(
+                            child: Text(
+                              entry.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Preisalarm setzen',
+                            icon: const Icon(
+                              Icons.notifications_outlined,
+                              size: 20,
+                            ),
+                            onPressed: () => _editTargetPrice(context, entry),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Entfernen',
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            onPressed: () => context
+                                .read<WishlistState>()
+                                .remove(entry.itadGameId),
+                          ),
+                        ],
+                      ),
+                      if (entry.targetPriceAmount != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Chip(
+                            visualDensity: VisualDensity.compact,
+                            label: Text(
+                              'Ziel: ${entry.targetPriceAmount!.toStringAsFixed(2)} €',
+                            ),
+                          ),
+                        ),
+                      _DealsComparison(
+                        price: price,
+                        isLoading: wishlist.isLoading,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            onTap: price?.bestDeal != null
-                ? () => launchUrl(
-                    Uri.parse(price!.bestDeal!.url),
-                    mode: LaunchMode.externalApplication,
-                  )
-                : null,
           ),
         );
       },
@@ -330,24 +381,107 @@ class _WishlistList extends StatelessWidget {
   }
 }
 
-class _PriceSubtitle extends StatelessWidget {
-  const _PriceSubtitle({required this.price, required this.isLoading});
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.videogame_asset_outlined,
+        color: Theme.of(context).colorScheme.outline,
+      ),
+    );
+  }
+}
+
+/// Lists the cheapest few shops for a wishlist entry so the whole point of
+/// tracking it — where it's cheapest right now, across stores — is visible
+/// at a glance instead of just a single "best price" line.
+class _DealsComparison extends StatelessWidget {
+  const _DealsComparison({required this.price, required this.isLoading});
 
   final ItadPriceInfo? price;
   final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
-    final currentPrice = price;
-    if (currentPrice == null) {
-      return Text(isLoading ? 'Lade Preis…' : 'Kein Preis gefunden');
+    final info = price;
+    if (info == null) {
+      return Text(
+        isLoading ? 'Lade Preise…' : 'Kein Preis gefunden',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
     }
-    final best = currentPrice.bestDeal;
-    final low = currentPrice.historyLowAll;
-    final parts = <String>[
-      if (best != null) 'Ab ${best.price.formatted} bei ${best.shopName}',
-      if (low != null) 'Tiefstpreis: ${low.formatted}',
-    ];
-    return Text(parts.isEmpty ? 'Kein Angebot gefunden' : parts.join(' · '));
+    if (info.deals.isEmpty) {
+      return Text(
+        'Kein Angebot gefunden',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final deal in info.deals.take(3))
+          InkWell(
+            onTap: () => launchUrl(
+              Uri.parse(deal.url),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      deal.shopName,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (deal.cutPercent > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '-${deal.cutPercent}%',
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    deal.price.formatted,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (info.historyLowAll != null)
+          Text(
+            'Tiefstpreis: ${info.historyLowAll!.formatted}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+      ],
+    );
   }
 }
