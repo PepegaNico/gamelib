@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:background_fetch/background_fetch.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
+import 'core/desktop/tray_service.dart';
+import 'core/notifications/background_price_check.dart';
 import 'features/auth/auth_state.dart';
 import 'features/auth/login_screen.dart';
 import 'features/epic/epic_state.dart';
@@ -15,8 +20,48 @@ import 'features/sync/sync_state.dart';
 import 'features/updates/updates_state.dart';
 import 'features/wishlist/wishlist_state.dart';
 
-void main() {
+/// Runs when iOS relaunches the app headlessly (fully terminated) just to
+/// perform a background fetch — must stay a top-level function so it
+/// survives AOT tree-shaking and can run without any of main()'s state.
+@pragma('vm:entry-point')
+void backgroundFetchHeadlessTask(HeadlessTask task) async {
+  if (task.timeout) {
+    BackgroundFetch.finish(task.taskId);
+    return;
+  }
+  await BackgroundPriceCheck.run();
+  BackgroundFetch.finish(task.taskId);
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await TrayService.instance.init();
+  if (Platform.isIOS) {
+    await _configureBackgroundPriceChecks();
+  }
   runApp(const GameLibApp());
+}
+
+/// Periodically wakes the app in the background (timing is opportunistic —
+/// iOS decides exactly when) to check wishlist prices and fire a local
+/// notification for any newly-triggered alert. See BackgroundPriceCheck.
+Future<void> _configureBackgroundPriceChecks() async {
+  await BackgroundFetch.configure(
+    BackgroundFetchConfig(
+      minimumFetchInterval: 60,
+      stopOnTerminate: false,
+      enableHeadless: true,
+      requiredNetworkType: NetworkType.ANY,
+    ),
+    (String taskId) async {
+      await BackgroundPriceCheck.run();
+      BackgroundFetch.finish(taskId);
+    },
+    (String taskId) async {
+      BackgroundFetch.finish(taskId);
+    },
+  );
+  BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
 }
 
 class GameLibApp extends StatelessWidget {
