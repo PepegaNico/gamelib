@@ -235,9 +235,10 @@ class WishlistState extends ChangeNotifier {
           }
 
           if (itadAvailable) {
-            if (match != null) {
+            final resolved = match;
+            if (resolved != null) {
               final realIndex = entries.indexWhere(
-                (e) => e.itadGameId == match.id,
+                (e) => e.itadGameId == resolved.id,
               );
               final syntheticIndex = entries.indexWhere(
                 (e) => e.itadGameId == syntheticId,
@@ -249,7 +250,7 @@ class WishlistState extends ChangeNotifier {
                 if (entries[realIndex].steamAppId == null) {
                   entries = [
                     for (final e in entries)
-                      if (e.itadGameId == match.id)
+                      if (e.itadGameId == resolved.id)
                         e.copyWith(steamAppId: appId)
                       else
                         e,
@@ -270,9 +271,9 @@ class WishlistState extends ChangeNotifier {
                   for (final e in entries)
                     if (e.itadGameId == syntheticId)
                       e.copyWith(
-                        itadGameId: match.id,
-                        title: match.title,
-                        slug: match.slug,
+                        itadGameId: resolved.id,
+                        title: resolved.title,
+                        slug: resolved.slug,
                         steamAppId: appId,
                       )
                     else
@@ -283,9 +284,9 @@ class WishlistState extends ChangeNotifier {
                 entries = [
                   ...entries,
                   WishlistEntry(
-                    itadGameId: match.id,
-                    title: match.title,
-                    slug: match.slug,
+                    itadGameId: resolved.id,
+                    title: resolved.title,
+                    slug: resolved.slug,
                     targetPriceAmount: null,
                     addedAt: DateTime.now(),
                     steamAppId: appId,
