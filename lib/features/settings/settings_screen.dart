@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../auth/auth_state.dart';
 import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
+import '../sync/qr_export_screen.dart';
+import '../sync/qr_import_screen.dart';
 import '../wishlist/wishlist_state.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -121,6 +123,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _buildSyncSection(),
+                const SizedBox(height: 32),
+                const Divider(),
+                const SizedBox(height: 32),
                 _buildSteamSection(auth, needsSteamSetup),
                 const SizedBox(height: 32),
                 const Divider(),
@@ -139,6 +145,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSyncSection() {
+    final canScan = Platform.isIOS || Platform.isAndroid;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.qr_code_2),
+            const SizedBox(width: 8),
+            Text(
+              'Geräte-Sync per QR-Code',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Überträgt alle verbundenen Konten (Steam, itch.io, IsThereAnyDeal) '
+          'auf ein anderes Gerät, ohne jeden API-Key erneut einzutippen.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const QrExportScreen()),
+          ),
+          icon: const Icon(Icons.qr_code),
+          label: const Text('Als QR-Code anzeigen'),
+        ),
+        if (canScan) ...[
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const QrImportScreen()),
+            ),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('QR-Code scannen'),
+          ),
+        ],
+      ],
     );
   }
 
