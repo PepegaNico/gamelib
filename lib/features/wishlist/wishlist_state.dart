@@ -82,11 +82,27 @@ class WishlistState extends ChangeNotifier {
     if (isConnected && entries.isNotEmpty) await refreshPrices();
   }
 
-  Future<void> connect(String key) async {
+  /// Connects the user's own IsThereAnyDeal key. Validates it against the
+  /// API first — previously an invalid key was accepted silently and only
+  /// surfaced as a "key ungültig" error much later during a Steam import
+  /// (or never, if the wishlist was still empty at connect time, since
+  /// refreshPrices skips empty wishlists). Returns an error message on an
+  /// invalid key, or null once it's actually confirmed to work.
+  Future<String?> connect(String key) async {
+    try {
+      await _apiService.lookupByTitle(key, 'Portal');
+    } on ItadApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      // A network hiccup during validation shouldn't block connecting — the
+      // key itself might be fine, it'll be retried on the next refresh.
+    }
+
     apiKey = key;
     await _credentialsStore.setApiKey(key);
     notifyListeners();
     if (entries.isNotEmpty) await refreshPrices();
+    return null;
   }
 
   Future<void> disconnect() async {

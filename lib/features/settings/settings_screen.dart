@@ -112,9 +112,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final key = _itadController.text.trim();
     if (key.isEmpty) return;
     setState(() => _connectingItad = true);
-    await context.read<WishlistState>().connect(key);
+    final error = await context.read<WishlistState>().connect(key);
+    if (!mounted) return;
     setState(() => _connectingItad = false);
-    _itadController.clear();
+    if (error == null) {
+      _itadController.clear();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
   }
 
   Future<void> _submitSyncAuth() async {

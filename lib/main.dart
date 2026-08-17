@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'app_theme.dart';
 import 'core/desktop/tray_service.dart';
 import 'core/notifications/background_price_check.dart';
+import 'core/widgets/build_banner.dart';
 import 'features/auth/auth_state.dart';
 import 'features/auth/login_screen.dart';
 import 'features/epic/epic_state.dart';
@@ -82,6 +83,8 @@ class GameLibApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         home: const _RootScreen(),
+        builder: (context, child) =>
+            BuildBanner(child: child ?? const SizedBox.shrink()),
       ),
     );
   }
