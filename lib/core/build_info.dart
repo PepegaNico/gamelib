@@ -3,5 +3,6 @@
 /// actually picked up the latest change instead of silently running stale
 /// code.
 class BuildInfo {
-  static const label = 'Fix: ITAD-Key wird beim Verbinden sofort geprüft';
+  static const label =
+      'Neu: Wishlist zeigt Bestpreis, tippen für alle Angebote';
 }
