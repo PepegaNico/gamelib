@@ -40,6 +40,8 @@ dependencies:
   url_launcher: ^6.3.2
   cached_network_image: ^3.4.1
   path_provider: ^2.1.6
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
 
 dev_dependencies:
   flutter_test:

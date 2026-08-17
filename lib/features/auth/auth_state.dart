@@ -82,6 +82,42 @@ class AuthState extends ChangeNotifier {
     return error;
   }
 
+  /// Adds an account whose SteamID64 is already known (from a QR-code
+  /// transfer from another device) — skips the OpenID browser round-trip
+  /// entirely, just re-validates the key/id pair against Steam. Also works
+  /// before any account is connected yet, letting a fresh device skip the
+  /// normal onboarding gate.
+  Future<String?> importAccount({
+    required String steamId,
+    required String apiKey,
+  }) async {
+    if (accounts.any((a) => a.steamId == steamId)) {
+      return null;
+    }
+
+    try {
+      final summary = await _webApiService.getPlayerSummary(
+        apiKey: apiKey,
+        steamId: steamId,
+      );
+      accounts = [
+        ...accounts,
+        SteamAccount(
+          steamId: steamId,
+          apiKey: apiKey,
+          personaName: summary.personaName,
+          avatarUrl: summary.avatarUrl,
+        ),
+      ];
+      await _store.saveAccounts(accounts);
+      status = AuthStatus.signedIn;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return 'Import fehlgeschlagen: $e';
+    }
+  }
+
   Future<String?> _performSignIn(String apiKey) async {
     isSigningIn = true;
     errorMessage = null;
