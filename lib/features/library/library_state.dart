@@ -4,6 +4,7 @@ import '../../core/epic/epic_game.dart';
 import '../../core/epic/epic_store_api_service.dart';
 import '../../core/itchio/itchio_game.dart';
 import '../../core/models/library_game.dart';
+import '../../core/steam/steam_account.dart';
 import '../../core/steam/steam_app_details.dart';
 import '../../core/steam/steam_game.dart';
 import '../../core/steam/steam_store_api_service.dart';
@@ -45,17 +46,50 @@ class LibraryState extends ChangeNotifier {
   bool isPrefetchingDetails = false;
   int prefetchedCount = 0;
 
-  Future<void> load({required String apiKey, required String steamId}) async {
+  /// Loads and merges owned games from every connected Steam account. A game
+  /// owned on more than one account is shown once, keeping the copy with the
+  /// most playtime (the account it's actually played on) so achievements
+  /// and launch data resolve to the right account.
+  Future<void> load({required List<SteamAccount> accounts}) async {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
-      _steamGames = await _webApiService.getOwnedGames(
-        apiKey: apiKey,
-        steamId: steamId,
+      var anySucceeded = false;
+      final perAccount = await Future.wait(
+        accounts.map((account) async {
+          try {
+            final games = await _webApiService.getOwnedGames(
+              apiKey: account.apiKey,
+              steamId: account.steamId,
+            );
+            anySucceeded = true;
+            return games;
+          } catch (_) {
+            return <SteamGame>[];
+          }
+        }),
       );
-      if (games.isEmpty) {
+
+      final merged = <int, SteamGame>{};
+      for (final accountGames in perAccount) {
+        for (final game in accountGames) {
+          final existing = merged[game.appId];
+          if (existing == null ||
+              game.playtimeForeverMinutes > existing.playtimeForeverMinutes) {
+            merged[game.appId] = game;
+          }
+        }
+      }
+      _steamGames = merged.values.toList()
+        ..sort(
+          (a, b) => b.playtimeForeverMinutes.compareTo(a.playtimeForeverMinutes),
+        );
+
+      if (!anySucceeded && accounts.isNotEmpty) {
+        errorMessage = 'Bibliothek konnte nicht geladen werden.';
+      } else if (games.isEmpty) {
         errorMessage =
             'Keine Spiele gefunden. Prüfe, ob dein Steam-Profil und deine '
             'Spieledetails auf "Öffentlich" gestellt sind (Steam-Profil → '

@@ -21,6 +21,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _steamFormKey = GlobalKey<FormState>();
   bool _savingSteam = false;
 
+  final _addSteamController = TextEditingController();
+  bool _addingSteamAccount = false;
+  String? _addSteamError;
+
   final _itchioController = TextEditingController();
   bool _connectingItchio = false;
 
@@ -30,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _steamController.dispose();
+    _addSteamController.dispose();
     _itchioController.dispose();
     _itadController.dispose();
     super.dispose();
@@ -63,13 +68,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _savingSteam = false);
   }
 
+  Future<void> _addSteamAccount() async {
+    final key = _addSteamController.text.trim();
+    if (key.length != 32) {
+      setState(() => _addSteamError = 'Ein gültiger Steam-API-Key hat 32 Zeichen.');
+      return;
+    }
+    setState(() {
+      _addingSteamAccount = true;
+      _addSteamError = null;
+    });
+    final error = await context.read<AuthState>().addAccount(key);
+    if (!mounted) return;
+    setState(() {
+      _addingSteamAccount = false;
+      _addSteamError = error;
+    });
+    if (error == null) _addSteamController.clear();
+  }
+
   Future<void> _connectItchio() async {
     final key = _itchioController.text.trim();
     if (key.isEmpty) return;
     setState(() => _connectingItchio = true);
-    await context.read<ItchioState>().connect(key);
+    final error = await context.read<ItchioState>().addAccount(key);
+    if (!mounted) return;
     setState(() => _connectingItchio = false);
-    _itchioController.clear();
+    if (error == null) _itchioController.clear();
   }
 
   Future<void> _connectItad() async {
@@ -96,7 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildSteamSection(needsSteamSetup),
+                _buildSteamSection(auth, needsSteamSetup),
                 const SizedBox(height: 32),
                 const Divider(),
                 const SizedBox(height: 32),
@@ -117,7 +142,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSteamSection(bool needsSetup) {
+  Widget _buildSteamSection(AuthState auth, bool needsSetup) {
+    if (auth.accounts.isEmpty) {
+      return _buildFirstSteamAccountForm(needsSetup);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.videogame_asset),
+            const SizedBox(width: 8),
+            Text('Steam', style: Theme.of(context).textTheme.titleLarge),
+          ],
+        ),
+        const SizedBox(height: 12),
+        for (final account in auth.accounts)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.check_circle, color: Colors.green),
+            title: Text(account.personaName),
+            subtitle: const Text('Verbunden'),
+            trailing: IconButton(
+              tooltip: 'Konto entfernen',
+              icon: const Icon(Icons.link_off),
+              onPressed: () =>
+                  context.read<AuthState>().removeAccount(account.steamId),
+            ),
+          ),
+        const SizedBox(height: 12),
+        Text(
+          'Weiteres Steam-Konto hinzufügen (z. B. einen zweiten Account) — '
+          'die Spiele werden gemeinsam in einer Bibliothek angezeigt.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _openSteamApiKeyPage,
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('API-Key für dieses Konto erstellen'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _addSteamController,
+          decoration: const InputDecoration(
+            labelText: 'Steam Web-API-Key des weiteren Kontos',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        if (_addSteamError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _addSteamError!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _addingSteamAccount ? null : _addSteamAccount,
+          icon: _addingSteamAccount
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.add),
+          label: Text(
+            _addingSteamAccount
+                ? 'Warte auf Browser…'
+                : 'Konto hinzufügen (Steam-Login öffnet sich)',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFirstSteamAccountForm(bool needsSetup) {
     return Form(
       key: _steamFormKey,
       child: Column(
@@ -191,56 +292,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 12),
         if (itchio.isConnected) ...[
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.check_circle, color: Colors.green),
-            title: Text('Verbunden als ${itchio.username ?? '…'}'),
-            subtitle: Text('${itchio.games.length} Spiele gefunden'),
+          for (final account in itchio.accounts)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.check_circle, color: Colors.green),
+              title: Text('Verbunden als ${account.username}'),
+              trailing: IconButton(
+                tooltip: 'Konto entfernen',
+                icon: const Icon(Icons.link_off),
+                onPressed: () =>
+                    context.read<ItchioState>().removeAccount(account.apiKey),
+              ),
+            ),
+          Text(
+            '${itchio.games.length} Spiele gefunden',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          OutlinedButton.icon(
-            onPressed: () => context.read<ItchioState>().disconnect(),
-            icon: const Icon(Icons.link_off),
-            label: const Text('itch.io trennen'),
+          const SizedBox(height: 12),
+          Text(
+            'Weiteres itch.io-Konto hinzufügen — die Spiele werden gemeinsam '
+            'in einer Bibliothek angezeigt.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-        ] else ...[
+          const SizedBox(height: 8),
+        ] else
           Text(
             'Bindet zusätzlich deine itch.io-Bibliothek über deinen eigenen, '
             'kostenlosen API-Key ein.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _openItchioApiKeyPage,
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Eigenen API-Key bei itch.io erstellen'),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _openItchioApiKeyPage,
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('Eigenen API-Key bei itch.io erstellen'),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _itchioController,
+          decoration: const InputDecoration(
+            labelText: 'itch.io-API-Key',
+            border: OutlineInputBorder(),
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _itchioController,
-            decoration: const InputDecoration(
-              labelText: 'itch.io-API-Key',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          if (itchio.errorMessage != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              itchio.errorMessage!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ],
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _connectingItchio ? null : _connectItchio,
-            child: _connectingItchio
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Verbinden'),
+        ),
+        if (itchio.errorMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            itchio.errorMessage!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: _connectingItchio ? null : _connectItchio,
+          child: _connectingItchio
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(itchio.isConnected ? 'Konto hinzufügen' : 'Verbinden'),
+        ),
       ],
     );
   }
@@ -360,7 +472,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ] else ...[
           Text(
             'Zeigt Preisvergleiche und historische Tiefstpreise über alle Stores '
-            'hinweg und ermöglicht eine Wishlist mit Preisalarm.',
+            'hinweg und ermöglicht eine Wishlist mit Preisalarm. Ein Key reicht — '
+            'die Preisdaten sind für jeden Key identisch, ein zweiter Account bringt '
+            'hier keinen zusätzlichen Nutzen.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),

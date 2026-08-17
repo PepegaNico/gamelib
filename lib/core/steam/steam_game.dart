@@ -10,15 +10,21 @@ class SteamGame implements LibraryGame {
   @override
   final DateTime? lastPlayed;
 
+  /// SteamID64 of the connected account this copy was fetched from — needed
+  /// to fetch achievements for the right account once a library can merge
+  /// games owned across several connected Steam accounts.
+  final String steamId;
+
   SteamGame({
     required this.appId,
     required this.name,
     required this.playtimeForeverMinutes,
     required this.playtime2WeeksMinutes,
     required this.lastPlayed,
+    required this.steamId,
   });
 
-  factory SteamGame.fromJson(Map<String, dynamic> json) {
+  factory SteamGame.fromJson(Map<String, dynamic> json, {required String steamId}) {
     final lastPlayedEpoch = json['rtime_last_played'] as int?;
     return SteamGame(
       appId: json['appid'] as int,
@@ -28,6 +34,7 @@ class SteamGame implements LibraryGame {
       lastPlayed: (lastPlayedEpoch != null && lastPlayedEpoch > 0)
           ? DateTime.fromMillisecondsSinceEpoch(lastPlayedEpoch * 1000)
           : null,
+      steamId: steamId,
     );
   }
 

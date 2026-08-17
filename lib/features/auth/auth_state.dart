@@ -1,11 +1,17 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/steam/steam_account.dart';
 import '../../core/steam/steam_credentials_store.dart';
 import '../../core/steam/steam_openid_service.dart';
 import '../../core/steam/steam_web_api_service.dart';
 
 enum AuthStatus { unknown, needsApiKey, needsLogin, signedIn }
 
+/// Manages every connected Steam account. The very first account still goes
+/// through the classic "enter API key → sign in with Steam" onboarding
+/// gate (driven by [status]); once at least one account is connected,
+/// further accounts are added in-place via [addAccount] from Settings
+/// without ever touching [status] again.
 class AuthState extends ChangeNotifier {
   AuthState({
     SteamOpenIdService? openIdService,
@@ -20,43 +26,63 @@ class AuthState extends ChangeNotifier {
   final SteamCredentialsStore _store;
 
   AuthStatus status = AuthStatus.unknown;
-  String? apiKey;
-  String? steamId;
-  String? personaName;
-  String? avatarUrl;
+  List<SteamAccount> accounts = [];
   String? errorMessage;
   bool isSigningIn = false;
 
+  String? _pendingApiKey;
+
+  SteamAccount? get primaryAccount => accounts.isEmpty ? null : accounts.first;
+
+  // Convenience accessors used by screens that only care about "the" Steam
+  // account (friends list, library header) — they resolve to the primary
+  // (first-connected) account once signed in.
+  String? get apiKey => primaryAccount?.apiKey ?? _pendingApiKey;
+  String? get steamId => primaryAccount?.steamId;
+  String? get personaName => primaryAccount?.personaName;
+  String? get avatarUrl => primaryAccount?.avatarUrl;
+
   Future<void> restore() async {
-    apiKey = await _store.getApiKey();
-    steamId = await _store.getSteamId();
-    personaName = await _store.getPersonaName();
-    avatarUrl = await _store.getAvatarUrl();
-
-    if (apiKey == null || apiKey!.isEmpty) {
-      status = AuthStatus.needsApiKey;
-    } else if (steamId == null || steamId!.isEmpty) {
-      status = AuthStatus.needsLogin;
-    } else {
-      status = AuthStatus.signedIn;
-    }
+    accounts = await _store.getAccounts();
+    status = accounts.isEmpty ? AuthStatus.needsApiKey : AuthStatus.signedIn;
     notifyListeners();
   }
 
+  /// Step 1 of the first-account onboarding gate: stash the API key and
+  /// move on to the "sign in with Steam" screen.
   Future<void> saveApiKey(String key) async {
-    await _store.setApiKey(key);
-    apiKey = key;
-    status = steamId == null ? AuthStatus.needsLogin : AuthStatus.signedIn;
+    _pendingApiKey = key;
+    status = AuthStatus.needsLogin;
     notifyListeners();
   }
 
+  /// Step 2 of the first-account onboarding gate, called from LoginScreen.
   Future<void> signInWithSteam() async {
-    if (apiKey == null || apiKey!.isEmpty) {
+    if (_pendingApiKey == null || _pendingApiKey!.isEmpty) {
       status = AuthStatus.needsApiKey;
       notifyListeners();
       return;
     }
 
+    final error = await _performSignIn(_pendingApiKey!);
+    if (error == null) {
+      _pendingApiKey = null;
+      status = AuthStatus.signedIn;
+    }
+    notifyListeners();
+  }
+
+  /// Adds an additional Steam account once already signed in (used by the
+  /// Settings screen). Returns an error message on failure, or null on
+  /// success — [status] is left untouched since the app is already past
+  /// the onboarding gate.
+  Future<String?> addAccount(String apiKey) async {
+    final error = await _performSignIn(apiKey);
+    notifyListeners();
+    return error;
+  }
+
+  Future<String?> _performSignIn(String apiKey) async {
     isSigningIn = true;
     errorMessage = null;
     notifyListeners();
@@ -65,43 +91,56 @@ class AuthState extends ChangeNotifier {
       final id = await _openIdService.signIn();
       if (id == null) {
         errorMessage = 'Anmeldung wurde abgebrochen oder ist fehlgeschlagen.';
-        return;
+        return errorMessage;
+      }
+      if (accounts.any((a) => a.steamId == id)) {
+        errorMessage = 'Dieser Steam-Account ist bereits verbunden.';
+        return errorMessage;
       }
 
-      steamId = id;
-      await _store.setSteamId(id);
-
       final summary = await _webApiService.getPlayerSummary(
-        apiKey: apiKey!,
+        apiKey: apiKey,
         steamId: id,
       );
-      personaName = summary.personaName;
-      avatarUrl = summary.avatarUrl;
-      await _store.setPersonaName(summary.personaName);
-      await _store.setAvatarUrl(summary.avatarUrl);
-
-      status = AuthStatus.signedIn;
+      final account = SteamAccount(
+        steamId: id,
+        apiKey: apiKey,
+        personaName: summary.personaName,
+        avatarUrl: summary.avatarUrl,
+      );
+      accounts = [...accounts, account];
+      await _store.saveAccounts(accounts);
+      return null;
     } catch (e) {
       errorMessage = 'Anmeldung fehlgeschlagen: $e';
+      return errorMessage;
     } finally {
       isSigningIn = false;
-      notifyListeners();
     }
   }
 
-  Future<void> signOut() async {
-    await _store.clearLogin();
-    steamId = null;
-    personaName = null;
-    avatarUrl = null;
-    status = AuthStatus.needsLogin;
+  /// Cancels the pending "enter API key" onboarding step (before any
+  /// account is connected) so the user can re-enter a different key.
+  Future<void> removeApiKey() async {
+    _pendingApiKey = null;
+    status = AuthStatus.needsApiKey;
     notifyListeners();
   }
 
-  Future<void> removeApiKey() async {
-    await _store.clearApiKey();
-    await signOut();
-    apiKey = null;
+  Future<void> removeAccount(String steamId) async {
+    accounts = accounts.where((a) => a.steamId != steamId).toList();
+    await _store.saveAccounts(accounts);
+    if (accounts.isEmpty) {
+      status = AuthStatus.needsApiKey;
+    }
+    notifyListeners();
+  }
+
+  /// Disconnects every Steam account (the AppBar "Abmelden" action).
+  Future<void> signOut() async {
+    accounts = [];
+    _pendingApiKey = null;
+    await _store.saveAccounts([]);
     status = AuthStatus.needsApiKey;
     notifyListeners();
   }
