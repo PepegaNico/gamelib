@@ -4,5 +4,5 @@
 /// code.
 class BuildInfo {
   static const label =
-      'Neu: Wishlist zeigt Bestpreis, tippen für alle Angebote';
+      'Fix: Wishlist-Preise lösen sich jetzt auch ohne lokales Steam-Konto auf';
 }
