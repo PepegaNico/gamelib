@@ -18,6 +18,7 @@ import 'firebase_config.dart';
 class FirestoreSyncService {
   static const _dataField = 'data';
   static const _epicLibraryField = 'epicLibrary';
+  static const _wishlistField = 'wishlist';
 
   static String _docUrl(String uid) =>
       'https://firestore.googleapis.com/v1/projects/${FirebaseConfig.projectId}'
@@ -48,6 +49,22 @@ class FirestoreSyncService {
     required String idToken,
     required String uid,
   }) => _downloadField(idToken: idToken, uid: uid, field: _epicLibraryField);
+
+  Future<void> uploadWishlist({
+    required String idToken,
+    required String uid,
+    required String payloadJson,
+  }) => _uploadField(
+    idToken: idToken,
+    uid: uid,
+    field: _wishlistField,
+    value: payloadJson,
+  );
+
+  Future<String?> downloadWishlist({
+    required String idToken,
+    required String uid,
+  }) => _downloadField(idToken: idToken, uid: uid, field: _wishlistField);
 
   Future<void> _uploadField({
     required String idToken,

@@ -7,6 +7,7 @@ import '../../core/sync/firebase_auth_service.dart';
 import '../../core/sync/firestore_sync_service.dart';
 import '../../core/sync/qr_credentials_payload.dart';
 import '../../core/sync/sync_credentials_store.dart';
+import '../../core/wishlist/wishlist_entry.dart';
 import '../auth/auth_state.dart';
 import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
@@ -97,6 +98,15 @@ class SyncState extends ChangeNotifier {
     } finally {
       isBusy = false;
       notifyListeners();
+    }
+  }
+
+  Future<String?> sendPasswordReset(String email) async {
+    try {
+      await _authService.sendPasswordReset(email);
+      return null;
+    } catch (e) {
+      return e.toString();
     }
   }
 
@@ -201,6 +211,38 @@ class SyncState extends ChangeNotifier {
               .map(EpicGame.fromSyncJson)
               .toList();
         }
+      }
+
+      // Wishlist can be edited (added/removed/re-targeted) on either
+      // device, unlike accounts — a plain union-merge would mean a deleted
+      // entry always comes back from whichever side didn't delete it. Use
+      // last-write-wins by timestamp instead: whichever copy changed more
+      // recently fully replaces the other.
+      final remoteWishlistJson = await _syncService.downloadWishlist(
+        idToken: token,
+        uid: _uid!,
+      );
+      if (remoteWishlistJson != null) {
+        final decoded = jsonDecode(remoteWishlistJson) as Map<String, dynamic>;
+        final remoteUpdatedAt = DateTime.parse(decoded['updatedAt'] as String);
+        if (remoteUpdatedAt.isAfter(wishlist.entriesUpdatedAt)) {
+          final remoteEntries = (decoded['entries'] as List)
+              .cast<Map<String, dynamic>>()
+              .map(WishlistEntry.fromJson)
+              .toList();
+          await wishlist.applyRemote(remoteEntries, remoteUpdatedAt);
+        }
+      }
+      if (wishlist.entries.isNotEmpty ||
+          wishlist.entriesUpdatedAt.millisecondsSinceEpoch > 0) {
+        await _syncService.uploadWishlist(
+          idToken: token,
+          uid: _uid!,
+          payloadJson: jsonEncode({
+            'updatedAt': wishlist.entriesUpdatedAt.toIso8601String(),
+            'entries': [for (final e in wishlist.entries) e.toJson()],
+          }),
+        );
       }
       return null;
     } catch (e) {

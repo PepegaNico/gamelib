@@ -68,6 +68,18 @@ class FirebaseAuthService {
     );
   }
 
+  Future<void> sendPasswordReset(String email) async {
+    final response = await http.post(
+      Uri.parse('$_accountsBase:sendOobCode?key=${FirebaseConfig.webApiKey}'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'requestType': 'PASSWORD_RESET', 'email': email}),
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      throw FirebaseAuthException(_friendlyError(body));
+    }
+  }
+
   Future<FirebaseAuthResult> refresh({
     required String refreshToken,
     required String fallbackUid,

@@ -133,6 +133,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _runSync();
   }
 
+  Future<void> _sendPasswordReset() async {
+    final email = _syncEmailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bitte zuerst deine E-Mail-Adresse eintragen.'),
+        ),
+      );
+      return;
+    }
+    final error = await context.read<SyncState>().sendPasswordReset(email);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ??
+              'E-Mail zum Zurücksetzen des Passworts wurde verschickt.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _runSync() async {
     final sync = context.read<SyncState>();
     final error = await sync.sync(
@@ -310,6 +332,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           border: OutlineInputBorder(),
         ),
       ),
+      if (!_syncIsRegistering)
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: sync.isBusy ? null : _sendPasswordReset,
+            child: const Text('Passwort vergessen?'),
+          ),
+        ),
       if (sync.errorMessage != null) ...[
         const SizedBox(height: 8),
         Text(
