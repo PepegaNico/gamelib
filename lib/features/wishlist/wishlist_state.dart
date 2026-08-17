@@ -200,6 +200,7 @@ class WishlistState extends ChangeNotifier {
       notifyListeners();
 
       var added = 0;
+      var upgraded = false;
       // Starts true only if ITAD is actually available; flips to false for
       // the rest of the run the moment a lookup fails (e.g. invalid key) so
       // one broken ITAD connection doesn't abort the whole import.
@@ -210,25 +211,72 @@ class WishlistState extends ChangeNotifier {
         steamImportDone++;
         if (steamImportDone % 5 == 0) notifyListeners();
 
+        final syntheticId = 'steam:$appId';
+
         if (itadAvailable) {
           try {
             final match = await _apiService.lookupBySteamAppId(
               effectiveApiKey!,
               appId,
             );
-            if (match != null && !entries.any((e) => e.itadGameId == match.id)) {
-              entries = [
-                ...entries,
-                WishlistEntry(
-                  itadGameId: match.id,
-                  title: match.title,
-                  slug: match.slug,
-                  targetPriceAmount: null,
-                  addedAt: DateTime.now(),
-                  steamAppId: appId,
-                ),
-              ];
-              added++;
+            if (match != null) {
+              final realIndex = entries.indexWhere(
+                (e) => e.itadGameId == match.id,
+              );
+              final syntheticIndex = entries.indexWhere(
+                (e) => e.itadGameId == syntheticId,
+              );
+              if (realIndex != -1) {
+                // Already tracked under its real ITAD id — just backfill the
+                // cover image if an older import didn't set it, and drop any
+                // leftover placeholder duplicate from before ITAD worked.
+                if (entries[realIndex].steamAppId == null) {
+                  entries = [
+                    for (final e in entries)
+                      if (e.itadGameId == match.id)
+                        e.copyWith(steamAppId: appId)
+                      else
+                        e,
+                  ];
+                  upgraded = true;
+                }
+                if (syntheticIndex != -1) {
+                  entries = entries
+                      .where((e) => e.itadGameId != syntheticId)
+                      .toList();
+                  upgraded = true;
+                }
+              } else if (syntheticIndex != -1) {
+                // Placeholder entry from a time ITAD wasn't available — now
+                // that it is, upgrade it to the real ITAD entry so images
+                // and price comparison start working for it.
+                entries = [
+                  for (final e in entries)
+                    if (e.itadGameId == syntheticId)
+                      e.copyWith(
+                        itadGameId: match.id,
+                        title: match.title,
+                        slug: match.slug,
+                        steamAppId: appId,
+                      )
+                    else
+                      e,
+                ];
+                upgraded = true;
+              } else {
+                entries = [
+                  ...entries,
+                  WishlistEntry(
+                    itadGameId: match.id,
+                    title: match.title,
+                    slug: match.slug,
+                    targetPriceAmount: null,
+                    addedAt: DateTime.now(),
+                    steamAppId: appId,
+                  ),
+                ];
+                added++;
+              }
             }
             continue;
           } catch (e) {
@@ -239,13 +287,27 @@ class WishlistState extends ChangeNotifier {
           }
         }
 
-        final fallbackId = 'steam:$appId';
-        if (entries.any((e) => e.itadGameId == fallbackId)) continue;
+        final existingSyntheticIndex = entries.indexWhere(
+          (e) => e.itadGameId == syntheticId,
+        );
+        if (existingSyntheticIndex != -1) {
+          if (entries[existingSyntheticIndex].steamAppId == null) {
+            entries = [
+              for (final e in entries)
+                if (e.itadGameId == syntheticId)
+                  e.copyWith(steamAppId: appId)
+                else
+                  e,
+            ];
+            upgraded = true;
+          }
+          continue;
+        }
         final details = await _steamStoreApi.getAppDetails(appId);
         entries = [
           ...entries,
           WishlistEntry(
-            itadGameId: fallbackId,
+            itadGameId: syntheticId,
             title: details?.name ?? 'Steam-App $appId',
             slug: '',
             targetPriceAmount: null,
@@ -257,7 +319,7 @@ class WishlistState extends ChangeNotifier {
       }
 
       entriesUpdatedAt = await _store.saveAll(entries);
-      if (added > 0 && isConnected) await refreshPrices();
+      if ((added > 0 || upgraded) && isConnected) await refreshPrices();
       return itadWarning;
     } catch (e) {
       errorMessage = 'Steam-Wishlist-Import fehlgeschlagen: $e';

@@ -23,18 +23,22 @@ class WishlistEntry {
   });
 
   WishlistEntry copyWith({
+    String? itadGameId,
+    String? title,
+    String? slug,
     double? targetPriceAmount,
     bool clearTarget = false,
+    int? steamAppId,
   }) {
     return WishlistEntry(
-      itadGameId: itadGameId,
-      title: title,
-      slug: slug,
+      itadGameId: itadGameId ?? this.itadGameId,
+      title: title ?? this.title,
+      slug: slug ?? this.slug,
       targetPriceAmount: clearTarget
           ? null
           : (targetPriceAmount ?? this.targetPriceAmount),
       addedAt: addedAt,
-      steamAppId: steamAppId,
+      steamAppId: steamAppId ?? this.steamAppId,
     );
   }
 
