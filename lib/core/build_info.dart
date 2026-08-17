@@ -3,6 +3,5 @@
 /// actually picked up the latest change instead of silently running stale
 /// code.
 class BuildInfo {
-  static const label =
-      'Fix: Preis-Auflösung überschreibt Wishlist nicht mehr geräteübergreifend';
+  static const label = 'Fix: Preise verschwinden nicht mehr nach kurzem Aufblitzen';
 }
