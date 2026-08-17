@@ -346,7 +346,17 @@ class WishlistState extends ChangeNotifier {
         added++;
       }
 
-      entriesUpdatedAt = await _store.saveAll(entries);
+      // Only a genuinely new entry is a real change worth telling Cloud-Sync
+      // about — resolving an existing placeholder's id/image is just this
+      // device catching up on what's already there, and bumping the sync
+      // timestamp for that could make this device's copy "win" a later
+      // sync purely by having refreshed first, overwriting a newer edit
+      // made on another device with no actual new information.
+      if (added > 0) {
+        entriesUpdatedAt = await _store.saveAll(entries);
+      } else if (upgraded) {
+        await _store.replaceAll(entries, entriesUpdatedAt);
+      }
       if ((added > 0 || upgraded) && isConnected) await refreshPrices();
       return itadWarning;
     } catch (e) {
@@ -442,6 +452,11 @@ class WishlistState extends ChangeNotifier {
       }
       changed = true;
     }
-    if (changed) entriesUpdatedAt = await _store.saveAll(entries);
+    // Persist locally without bumping entriesUpdatedAt — resolving a
+    // placeholder to its (deterministic) real ITAD id isn't a user edit,
+    // and treating it as one made whichever device happened to run this
+    // last "win" the next Cloud-Sync, silently overwriting a genuinely
+    // newer wishlist on another device with stale placeholder data.
+    if (changed) await _store.replaceAll(entries, entriesUpdatedAt);
   }
 }

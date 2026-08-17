@@ -4,5 +4,5 @@
 /// code.
 class BuildInfo {
   static const label =
-      'Fix: Wishlist-Preise lösen sich jetzt auch ohne lokales Steam-Konto auf';
+      'Fix: Preis-Auflösung überschreibt Wishlist nicht mehr geräteübergreifend';
 }
