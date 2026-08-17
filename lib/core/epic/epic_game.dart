@@ -117,6 +117,37 @@ class EpicGame implements LibraryGame {
     storeDetailsFetched = true;
   }
 
+  /// Compact snapshot for the Cloud-Sync Firestore document — only what's
+  /// needed to display/browse the game elsewhere, not install-state, since
+  /// that's meaningless on a device without this game actually installed.
+  Map<String, dynamic> toSyncJson() => {
+    'appName': appName,
+    'name': name,
+    'namespace': namespace,
+    'catalogItemId': catalogItemId,
+    'resolvedImageUrl': resolvedImageUrl,
+    'resolvedDescription': resolvedDescription,
+    'resolvedDeveloper': resolvedDeveloper,
+    'resolvedCategories': resolvedCategories,
+    'resolvedProductSlug': resolvedProductSlug,
+  };
+
+  factory EpicGame.fromSyncJson(Map<String, dynamic> json) {
+    return EpicGame(
+        appName: json['appName'] as String,
+        name: json['name'] as String,
+        namespace: json['namespace'] as String?,
+        catalogItemId: json['catalogItemId'] as String?,
+      )
+      ..resolvedImageUrl = json['resolvedImageUrl'] as String?
+      ..resolvedDescription = json['resolvedDescription'] as String?
+      ..resolvedDeveloper = json['resolvedDeveloper'] as String?
+      ..resolvedCategories =
+          (json['resolvedCategories'] as List?)?.cast<String>() ?? []
+      ..resolvedProductSlug = json['resolvedProductSlug'] as String?
+      ..storeDetailsFetched = true;
+  }
+
   @override
   String get id => 'epic:$appName';
 

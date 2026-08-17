@@ -91,8 +91,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final wishlist = context.read<WishlistState>();
     final sync = context.read<SyncState>();
 
+    // Epic first — its own scan has to finish before sync() runs, since
+    // sync() decides whether to push or pull the Epic snapshot based on
+    // whether this device found anything locally (see SyncState.sync).
+    await epic.refresh();
+    if (!mounted) return;
+
     if (sync.status == SyncStatus.loggedIn) {
-      await sync.sync(auth: auth, itchio: itchio, wishlist: wishlist);
+      await sync.sync(auth: auth, itchio: itchio, wishlist: wishlist, epic: epic);
       if (!mounted) return;
     }
 
@@ -103,12 +109,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (itchio.isConnected) {
       futures.add(itchio.refresh());
     }
-    futures.add(epic.refresh());
     await Future.wait(futures);
     if (!mounted) return;
 
     library.setItchioGames(itchio.games);
-    library.setEpicGames(epic.games);
+    library.setEpicGames(epic.games.isNotEmpty ? epic.games : sync.syncedEpicGames);
     unawaited(context.read<UpdatesState>().checkForUpdates(library.steamGames));
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
