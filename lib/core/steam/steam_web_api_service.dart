@@ -55,7 +55,7 @@ class SteamWebApiService {
     final games =
         (gamesResponse['games'] as List)
             .cast<Map<String, dynamic>>()
-            .map(SteamGame.fromJson)
+            .map((json) => SteamGame.fromJson(json, steamId: steamId))
             .toList()
           ..sort(
             (a, b) =>

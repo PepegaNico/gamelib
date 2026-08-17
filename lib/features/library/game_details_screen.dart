@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/itad/itad_api_service.dart';
 import '../../core/itad/itad_models.dart';
+import '../../core/steam/steam_account.dart';
 import '../../core/steam/steam_achievement.dart';
 import '../../core/steam/steam_app_details.dart';
 import '../../core/steam/steam_game.dart';
@@ -53,14 +54,21 @@ class _GameDetailsScreenState extends State<GameDetailsScreen> {
 
   Future<void> _loadAchievements() async {
     final auth = context.read<AuthState>();
-    if (auth.apiKey == null || auth.steamId == null) {
+    SteamAccount? owningAccount = auth.primaryAccount;
+    for (final a in auth.accounts) {
+      if (a.steamId == widget.game.steamId) {
+        owningAccount = a;
+        break;
+      }
+    }
+    if (owningAccount == null) {
       setState(() => _loadingAchievements = false);
       return;
     }
 
     final achievements = await _webApi.getAchievements(
-      apiKey: auth.apiKey!,
-      steamId: auth.steamId!,
+      apiKey: owningAccount.apiKey,
+      steamId: owningAccount.steamId,
       appId: widget.game.appId,
     );
     if (!mounted) return;

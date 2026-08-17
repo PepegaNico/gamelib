@@ -56,6 +56,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final Set<GamePlatform> _selectedPlatforms = {...GamePlatform.values};
   int _railIndex = 0;
 
+  /// Null until the user explicitly toggles it, so the sidebar defaults to
+  /// expanded on wide (desktop) windows and collapsed on narrow (phone) ones.
+  bool? _menuExpanded;
+
+  int get _activeFilterCount {
+    var count = 0;
+    if (_selectedPlatforms.length != GamePlatform.values.length) count++;
+    if (_onlyPlayed) count++;
+    if (_onlyUnplayed) count++;
+    if (_onlyControllerSupport) count++;
+    if (_onlyGerman) count++;
+    return count;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -75,8 +89,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final epic = context.read<EpicState>();
 
     final futures = <Future<void>>[];
-    if (auth.apiKey != null && auth.steamId != null) {
-      futures.add(library.load(apiKey: auth.apiKey!, steamId: auth.steamId!));
+    if (auth.accounts.isNotEmpty) {
+      futures.add(library.load(accounts: auth.accounts));
     }
     if (itchio.isConnected) {
       futures.add(itchio.refresh());
@@ -165,9 +179,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
       library.games,
       library.appDetailsCache,
     );
+    final menuExpanded =
+        _menuExpanded ?? MediaQuery.of(context).size.width >= 700;
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: menuExpanded ? 'Menü einklappen' : 'Menü ausklappen',
+          icon: Icon(menuExpanded ? Icons.menu_open : Icons.menu),
+          onPressed: () => setState(() => _menuExpanded = !menuExpanded),
+        ),
         title: Row(
           children: [
             if (auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty) ...[
@@ -203,6 +224,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
       body: Row(
         children: [
+          if (menuExpanded) ...[
           NavigationRail(
             selectedIndex: _railIndex,
             labelType: NavigationRailLabelType.all,
@@ -265,22 +287,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ],
           ),
           const VerticalDivider(width: 1),
+          ],
           Expanded(
             child: Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (value) => setState(() => _query = value),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Spiele durchsuchen…',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                _buildFilterBar(library),
+                _buildSearchAndFilterBar(library),
                 if (!library.isLoading && library.games.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -311,102 +322,211 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildFilterBar(LibraryState library) {
+  /// Compact search + filter bar. The actual filter controls live behind
+  /// the funnel button in a bottom sheet (see [_openFilterSheet]) instead of
+  /// always taking up vertical space above the grid.
+  Widget _buildSearchAndFilterBar(LibraryState library) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (library.isPrefetchingDetails)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 12,
                     height: 12,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      value: library.games.isEmpty
-                          ? null
-                          : library.prefetchedCount / library.games.length,
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Lade Zusatzinfos (Controller/Sprache)… ${library.prefetchedCount}/${library.games.length}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  Expanded(
+                    child: Text(
+                      'Lade Zusatzinfos… ${library.prefetchedCount}/${library.games.length}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
             ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
             children: [
-              for (final platform in GamePlatform.values)
-                FilterChip(
-                  avatar: Icon(platform.icon, size: 16),
-                  label: Text(platform.label),
-                  selected: _selectedPlatforms.contains(platform),
-                  onSelected: (selected) => setState(() {
-                    if (selected) {
-                      _selectedPlatforms.add(platform);
-                    } else {
-                      _selectedPlatforms.remove(platform);
-                    }
-                  }),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Spiele durchsuchen…',
+                    isDense: true,
+                  ),
                 ),
-              FilterChip(
-                avatar: const Icon(Icons.check_circle_outline, size: 16),
-                label: const Text('Nur gespielte'),
-                selected: _onlyPlayed,
-                onSelected: (selected) => setState(() {
-                  _onlyPlayed = selected;
-                  if (selected) _onlyUnplayed = false;
-                }),
               ),
-              FilterChip(
-                avatar: const Icon(Icons.inventory_2_outlined, size: 16),
-                label: const Text('Nur ungespielt (Backlog)'),
-                selected: _onlyUnplayed,
-                onSelected: (selected) => setState(() {
-                  _onlyUnplayed = selected;
-                  if (selected) _onlyPlayed = false;
-                }),
-              ),
-              FilterChip(
-                avatar: const Icon(Icons.gamepad_outlined, size: 16),
-                label: const Text('Controller-Support'),
-                selected: _onlyControllerSupport,
-                onSelected: (selected) =>
-                    setState(() => _onlyControllerSupport = selected),
-              ),
-              FilterChip(
-                avatar: const Icon(Icons.translate, size: 16),
-                label: const Text('Deutsch verfügbar'),
-                selected: _onlyGerman,
-                onSelected: (selected) =>
-                    setState(() => _onlyGerman = selected),
-              ),
-              const SizedBox(width: 4),
-              PopupMenuButton<_SortMode>(
-                initialValue: _sortMode,
-                onSelected: (mode) => setState(() => _sortMode = mode),
-                itemBuilder: (context) => [
-                  for (final mode in _SortMode.values)
-                    PopupMenuItem(value: mode, child: Text(mode.label)),
-                ],
-                child: Chip(
-                  avatar: const Icon(Icons.sort, size: 16),
-                  label: Text(_sortMode.label),
+              const SizedBox(width: 8),
+              Badge(
+                isLabelVisible: _activeFilterCount > 0,
+                label: Text('$_activeFilterCount'),
+                child: IconButton(
+                  tooltip: 'Filter & Sortierung',
+                  onPressed: _openFilterSheet,
+                  icon: const Icon(Icons.tune),
+                  style: IconButton.styleFrom(
+                    backgroundColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
                 ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  void _openFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            void update(VoidCallback change) {
+              setState(change);
+              setSheetState(() {});
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Filter & Sortierung',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          if (_activeFilterCount > 0)
+                            TextButton(
+                              onPressed: () => update(() {
+                                _selectedPlatforms
+                                  ..clear()
+                                  ..addAll(GamePlatform.values);
+                                _onlyPlayed = false;
+                                _onlyUnplayed = false;
+                                _onlyControllerSupport = false;
+                                _onlyGerman = false;
+                              }),
+                              child: const Text('Zurücksetzen'),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Plattform',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final platform in GamePlatform.values)
+                            FilterChip(
+                              avatar: Icon(platform.icon, size: 16),
+                              label: Text(platform.label),
+                              selected: _selectedPlatforms.contains(platform),
+                              onSelected: (selected) => update(() {
+                                if (selected) {
+                                  _selectedPlatforms.add(platform);
+                                } else {
+                                  _selectedPlatforms.remove(platform);
+                                }
+                              }),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Status',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilterChip(
+                            avatar: const Icon(
+                              Icons.check_circle_outline,
+                              size: 16,
+                            ),
+                            label: const Text('Nur gespielte'),
+                            selected: _onlyPlayed,
+                            onSelected: (selected) => update(() {
+                              _onlyPlayed = selected;
+                              if (selected) _onlyUnplayed = false;
+                            }),
+                          ),
+                          FilterChip(
+                            avatar: const Icon(
+                              Icons.inventory_2_outlined,
+                              size: 16,
+                            ),
+                            label: const Text('Nur ungespielt (Backlog)'),
+                            selected: _onlyUnplayed,
+                            onSelected: (selected) => update(() {
+                              _onlyUnplayed = selected;
+                              if (selected) _onlyPlayed = false;
+                            }),
+                          ),
+                          FilterChip(
+                            avatar: const Icon(Icons.gamepad_outlined, size: 16),
+                            label: const Text('Controller-Support'),
+                            selected: _onlyControllerSupport,
+                            onSelected: (selected) =>
+                                update(() => _onlyControllerSupport = selected),
+                          ),
+                          FilterChip(
+                            avatar: const Icon(Icons.translate, size: 16),
+                            label: const Text('Deutsch verfügbar'),
+                            selected: _onlyGerman,
+                            onSelected: (selected) =>
+                                update(() => _onlyGerman = selected),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Sortierung',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      for (final mode in _SortMode.values)
+                        RadioListTile<_SortMode>(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(mode.label),
+                          value: mode,
+                          groupValue: _sortMode,
+                          onChanged: (value) =>
+                              update(() => _sortMode = value!),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
