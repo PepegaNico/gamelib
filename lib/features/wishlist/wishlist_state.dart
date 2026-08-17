@@ -346,7 +346,17 @@ class WishlistState extends ChangeNotifier {
         added++;
       }
 
-      entriesUpdatedAt = await _store.saveAll(entries);
+      // Only a genuinely new entry is a real change worth telling Cloud-Sync
+      // about — resolving an existing placeholder's id/image is just this
+      // device catching up on what's already there, and bumping the sync
+      // timestamp for that could make this device's copy "win" a later
+      // sync purely by having refreshed first, overwriting a newer edit
+      // made on another device with no actual new information.
+      if (added > 0) {
+        entriesUpdatedAt = await _store.saveAll(entries);
+      } else if (upgraded) {
+        await _store.replaceAll(entries, entriesUpdatedAt);
+      }
       if ((added > 0 || upgraded) && isConnected) await refreshPrices();
       return itadWarning;
     } catch (e) {
@@ -378,7 +388,13 @@ class WishlistState extends ChangeNotifier {
           .toList();
       if (realIds.isEmpty) return;
 
-      priceCache = await _apiService.getPrices(effectiveApiKey!, realIds);
+      // Merge into the existing cache rather than replacing it outright —
+      // a rate-limited or partially-failed batch call still returns 200
+      // with whatever it did manage to fetch, and overwriting the whole
+      // cache with that made already-loaded prices vanish again on the
+      // very next refresh for no real reason.
+      final fetched = await _apiService.getPrices(effectiveApiKey!, realIds);
+      priceCache = {...priceCache, ...fetched};
     } catch (e) {
       errorMessage = 'Preise konnten nicht geladen werden: $e';
     } finally {
@@ -394,11 +410,20 @@ class WishlistState extends ChangeNotifier {
   /// entries that arrived here via Cloud-Sync from another device where
   /// ITAD wasn't available yet, or this device simply has no Steam
   /// account connected locally — importFromSteam alone can't reach those).
+  /// Caps how many placeholders get resolved per refresh — this runs right
+  /// before the batch price call below, and a large wishlist full of
+  /// placeholders firing off that many sequential single-game lookups
+  /// first made the batch call itself far more likely to get rate-limited
+  /// (which used to silently wipe the whole price cache — see
+  /// refreshPrices). The rest simply get picked up on the next refresh.
+  static const _maxSyntheticUpgradesPerRefresh = 15;
+
   Future<void> _upgradeSyntheticEntries() async {
     final pending = entries
         .where(
           (e) => e.itadGameId.startsWith('steam:') && e.steamAppId != null,
         )
+        .take(_maxSyntheticUpgradesPerRefresh)
         .toList();
     if (pending.isEmpty) return;
 
@@ -442,6 +467,11 @@ class WishlistState extends ChangeNotifier {
       }
       changed = true;
     }
-    if (changed) entriesUpdatedAt = await _store.saveAll(entries);
+    // Persist locally without bumping entriesUpdatedAt — resolving a
+    // placeholder to its (deterministic) real ITAD id isn't a user edit,
+    // and treating it as one made whichever device happened to run this
+    // last "win" the next Cloud-Sync, silently overwriting a genuinely
+    // newer wishlist on another device with stale placeholder data.
+    if (changed) await _store.replaceAll(entries, entriesUpdatedAt);
   }
 }
