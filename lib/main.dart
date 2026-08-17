@@ -11,6 +11,7 @@ import 'features/library/library_screen.dart';
 import 'features/library/library_state.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/stats/stats_state.dart';
+import 'features/sync/sync_state.dart';
 import 'features/updates/updates_state.dart';
 import 'features/wishlist/wishlist_state.dart';
 
@@ -33,6 +34,7 @@ class GameLibApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => EpicState()),
         ChangeNotifierProvider(create: (_) => StatsState()..load()),
         ChangeNotifierProvider(create: (_) => WishlistState()..restore()),
+        ChangeNotifierProvider(create: (_) => SyncState()..restore()),
       ],
       child: MaterialApp(
         title: 'GameLib',

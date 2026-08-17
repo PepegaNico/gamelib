@@ -20,6 +20,7 @@ import '../settings/settings_screen.dart';
 import '../stats/stats_screen.dart';
 import '../stats/stats_state.dart';
 import '../store/store_search_screen.dart';
+import '../sync/sync_state.dart';
 import '../updates/updates_screen.dart';
 import '../updates/updates_state.dart';
 import '../wishlist/wishlist_screen.dart';
@@ -87,6 +88,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final library = context.read<LibraryState>();
     final itchio = context.read<ItchioState>();
     final epic = context.read<EpicState>();
+    final wishlist = context.read<WishlistState>();
+    final sync = context.read<SyncState>();
+
+    if (sync.status == SyncStatus.loggedIn) {
+      await sync.sync(auth: auth, itchio: itchio, wishlist: wishlist);
+      if (!mounted) return;
+    }
 
     final futures = <Future<void>>[];
     if (auth.accounts.isNotEmpty) {
@@ -105,7 +113,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
     unawaited(context.read<StatsState>().recordSnapshot(library.steamGames));
-    unawaited(context.read<WishlistState>().refreshPrices());
+    unawaited(wishlist.refreshPrices());
   }
 
   List<LibraryGame> _applyFiltersAndSort(
