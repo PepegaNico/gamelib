@@ -3,6 +3,6 @@
 /// Firestore security rules plus per-user Authentication, not these values.
 /// From Firebase Console → Project settings → General.
 class FirebaseConfig {
-  static const projectId = 'REPLACE_WITH_PROJECT_ID';
-  static const webApiKey = 'REPLACE_WITH_WEB_API_KEY';
+  static const projectId = 'gamelib-34855';
+  static const webApiKey = 'AIzaSyD4gVlFOnjA6qu5GZyW0bvcNobMb-z7kMU';
 }
