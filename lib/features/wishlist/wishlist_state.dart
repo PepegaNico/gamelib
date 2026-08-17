@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../../core/itad/itad_api_service.dart';
 import '../../core/itad/itad_credentials_store.dart';
 import '../../core/itad/itad_models.dart';
+import '../../core/steam/steam_account.dart';
+import '../../core/steam/steam_wishlist_api_service.dart';
 import '../../core/wishlist/wishlist_entry.dart';
 import '../../core/wishlist/wishlist_store.dart';
 
@@ -11,13 +13,21 @@ class WishlistState extends ChangeNotifier {
     ItadApiService? apiService,
     ItadCredentialsStore? credentialsStore,
     WishlistStore? store,
+    SteamWishlistApiService? steamWishlistApi,
   }) : _apiService = apiService ?? ItadApiService(),
        _credentialsStore = credentialsStore ?? ItadCredentialsStore.instance,
-       _store = store ?? WishlistStore();
+       _store = store ?? WishlistStore(),
+       _steamWishlistApi = steamWishlistApi ?? SteamWishlistApiService();
 
   final ItadApiService _apiService;
   final ItadCredentialsStore _credentialsStore;
   final WishlistStore _store;
+  final SteamWishlistApiService _steamWishlistApi;
+
+  /// Set by [importFromSteam] while it works through (potentially many)
+  /// Steam wishlist games one lookup at a time, so the UI can show progress.
+  int steamImportTotal = 0;
+  int steamImportDone = 0;
 
   String? apiKey;
   List<WishlistEntry> entries = [];
@@ -123,6 +133,72 @@ class WishlistState extends ChangeNotifier {
     await _store.replaceAll(remoteEntries, remoteUpdatedAt);
     notifyListeners();
     if (isConnected && entries.isNotEmpty) await refreshPrices();
+  }
+
+  /// Imports every game on the given Steam accounts' public wishlists that
+  /// isn't already tracked here, matching each Steam appid to its
+  /// IsThereAnyDeal entry (so the resulting wishlist entries get the same
+  /// cross-store price comparison as anything added manually — ITAD covers
+  /// Epic/GOG/etc. prices too, not just Steam). Returns an error message on
+  /// failure, or null on success (even if zero new games were found).
+  Future<String?> importFromSteam(List<SteamAccount> accounts) async {
+    if (!isConnected) {
+      return 'Erst IsThereAnyDeal in den Einstellungen verbinden.';
+    }
+
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final appIds = <int>{};
+      for (final account in accounts) {
+        appIds.addAll(
+          await _steamWishlistApi.getWishlistAppIds(
+            steamId: account.steamId,
+            apiKey: account.apiKey,
+          ),
+        );
+      }
+
+      steamImportTotal = appIds.length;
+      steamImportDone = 0;
+      notifyListeners();
+
+      var added = 0;
+      for (final appId in appIds) {
+        steamImportDone++;
+        if (steamImportDone % 5 == 0) notifyListeners();
+
+        final match = await _apiService.lookupBySteamAppId(apiKey!, appId);
+        if (match == null || entries.any((e) => e.itadGameId == match.id)) {
+          continue;
+        }
+        entries = [
+          ...entries,
+          WishlistEntry(
+            itadGameId: match.id,
+            title: match.title,
+            slug: match.slug,
+            targetPriceAmount: null,
+            addedAt: DateTime.now(),
+          ),
+        ];
+        added++;
+      }
+
+      entriesUpdatedAt = await _store.saveAll(entries);
+      if (added > 0) await refreshPrices();
+      return null;
+    } catch (e) {
+      errorMessage = 'Steam-Wishlist-Import fehlgeschlagen: $e';
+      return errorMessage;
+    } finally {
+      steamImportTotal = 0;
+      steamImportDone = 0;
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> refreshPrices() async {

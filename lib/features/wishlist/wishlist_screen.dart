@@ -4,11 +4,31 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/itad/itad_models.dart';
 import '../../core/wishlist/wishlist_entry.dart';
+import '../auth/auth_state.dart';
 import '../settings/settings_screen.dart';
 import 'wishlist_state.dart';
 
 class WishlistScreen extends StatelessWidget {
   const WishlistScreen({super.key});
+
+  Future<void> _importFromSteam(BuildContext context) async {
+    final auth = context.read<AuthState>();
+    final wishlist = context.read<WishlistState>();
+    if (auth.accounts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erst ein Steam-Konto in den Einstellungen verbinden.'),
+        ),
+      );
+      return;
+    }
+
+    final error = await wishlist.importFromSteam(auth.accounts);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error ?? 'Steam-Wishlist importiert.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,6 +38,14 @@ class WishlistScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Wishlist & Preisalarm'),
         actions: [
+          if (wishlist.isConnected)
+            IconButton(
+              tooltip: 'Steam-Wishlist importieren',
+              onPressed: wishlist.isLoading
+                  ? null
+                  : () => _importFromSteam(context),
+              icon: const Icon(Icons.download_outlined),
+            ),
           if (wishlist.isConnected)
             IconButton(
               tooltip: 'Preise aktualisieren',
@@ -36,6 +64,26 @@ class WishlistScreen extends StatelessWidget {
                   padding: EdgeInsets.all(16),
                   child: _AddGameField(),
                 ),
+                if (wishlist.isLoading && wishlist.steamImportTotal > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        LinearProgressIndicator(
+                          value:
+                              wishlist.steamImportDone /
+                              wishlist.steamImportTotal,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Importiere Steam-Wishlist… '
+                          '${wishlist.steamImportDone}/${wishlist.steamImportTotal}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
                 Expanded(child: _WishlistList(wishlist: wishlist)),
               ],
             ),
