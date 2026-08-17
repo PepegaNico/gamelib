@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
+import '../../core/epic/epic_game.dart';
 import '../../core/sync/firebase_auth_service.dart';
 import '../../core/sync/firestore_sync_service.dart';
 import '../../core/sync/qr_credentials_payload.dart';
 import '../../core/sync/sync_credentials_store.dart';
 import '../auth/auth_state.dart';
+import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
 import '../wishlist/wishlist_state.dart';
 
@@ -37,6 +41,13 @@ class SyncState extends ChangeNotifier {
   String? _idToken;
   String? _refreshToken;
   DateTime? _idTokenExpiresAt;
+
+  /// Epic games last pulled from another device's sync — Epic has no
+  /// portable credential, so this is a one-way, read-only snapshot rather
+  /// than something this device can itself own or re-upload. Populated by
+  /// [sync]; combined with any locally-scanned Epic games by whoever calls
+  /// this (see LibraryScreen._refresh).
+  List<EpicGame> syncedEpicGames = [];
 
   Future<void> restore() async {
     final saved = await _store.read();
@@ -127,6 +138,7 @@ class SyncState extends ChangeNotifier {
     required AuthState auth,
     required ItchioState itchio,
     required WishlistState wishlist,
+    required EpicState epic,
   }) async {
     if (status != SyncStatus.loggedIn) return 'Nicht angemeldet.';
 
@@ -166,6 +178,30 @@ class SyncState extends ChangeNotifier {
         uid: _uid!,
         payloadJson: local.encode(),
       );
+
+      // Epic has no portable credential — only a device that actually
+      // scanned a local Epic library (Windows) can contribute one, so a
+      // device with nothing local never overwrites what's already there.
+      if (epic.games.isNotEmpty) {
+        await _syncService.uploadEpicLibrary(
+          idToken: token,
+          uid: _uid!,
+          payloadJson: jsonEncode(
+            [for (final g in epic.games) g.toSyncJson()],
+          ),
+        );
+      } else {
+        final epicJson = await _syncService.downloadEpicLibrary(
+          idToken: token,
+          uid: _uid!,
+        );
+        if (epicJson != null) {
+          syncedEpicGames = (jsonDecode(epicJson) as List)
+              .cast<Map<String, dynamic>>()
+              .map(EpicGame.fromSyncJson)
+              .toList();
+        }
+      }
       return null;
     } catch (e) {
       errorMessage = 'Sync fehlgeschlagen: $e';
