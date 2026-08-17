@@ -68,7 +68,7 @@ class QrExportScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       Text(
                         '${auth.accounts.length} Steam-, ${itchio.accounts.length} '
-                        'itch.io-Konto(en)${wishlist.isConnected ? " + IsThereAnyDeal" : ""}',
+                        'itch.io-Konto(en)${wishlist.hasOwnKey ? " + IsThereAnyDeal" : ""}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 16),

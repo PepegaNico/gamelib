@@ -171,7 +171,7 @@ class SyncState extends ChangeNotifier {
         for (final key in remote.itchioApiKeys) {
           await itchio.addAccount(key);
         }
-        if (remote.itadApiKey != null && !wishlist.isConnected) {
+        if (remote.itadApiKey != null && !wishlist.hasOwnKey) {
           await wishlist.connect(remote.itadApiKey!);
         }
       }

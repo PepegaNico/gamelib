@@ -8,12 +8,18 @@ class WishlistEntry {
   final double? targetPriceAmount;
   final DateTime addedAt;
 
+  /// Set when this entry came from a Steam wishlist import — lets the UI
+  /// show the Steam header image without a separate lookup, and is null
+  /// for entries added manually via ITAD search.
+  final int? steamAppId;
+
   WishlistEntry({
     required this.itadGameId,
     required this.title,
     required this.slug,
     required this.targetPriceAmount,
     required this.addedAt,
+    this.steamAppId,
   });
 
   WishlistEntry copyWith({
@@ -28,6 +34,7 @@ class WishlistEntry {
           ? null
           : (targetPriceAmount ?? this.targetPriceAmount),
       addedAt: addedAt,
+      steamAppId: steamAppId,
     );
   }
 
@@ -38,6 +45,7 @@ class WishlistEntry {
       slug: json['slug'] as String,
       targetPriceAmount: (json['targetPriceAmount'] as num?)?.toDouble(),
       addedAt: DateTime.parse(json['addedAt'] as String),
+      steamAppId: (json['steamAppId'] as num?)?.toInt(),
     );
   }
 
@@ -47,5 +55,6 @@ class WishlistEntry {
     'slug': slug,
     'targetPriceAmount': targetPriceAmount,
     'addedAt': addedAt.toIso8601String(),
+    'steamAppId': steamAppId,
   };
 }

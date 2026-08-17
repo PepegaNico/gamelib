@@ -226,7 +226,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _SettingsSection(
                   icon: Icons.price_check,
                   title: 'IsThereAnyDeal',
-                  status: wishlist.isConnected ? _statusChip('Aktiv') : null,
+                  status: wishlist.hasOwnKey
+                      ? _statusChip('Eigener Key')
+                      : (wishlist.isConnected
+                            ? _statusChip('Gemeinsamer Key')
+                            : null),
                   children: _buildItadSectionChildren(wishlist),
                 ),
                 const SizedBox(height: 24),
@@ -675,11 +679,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   List<Widget> _buildItadSectionChildren(WishlistState wishlist) {
     return [
-      if (wishlist.isConnected) ...[
+      if (wishlist.hasOwnKey) ...[
         const ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.check_circle, color: Colors.green),
-          title: Text('Verbunden'),
+          title: Text('Eigener Key verbunden'),
           subtitle: Text(
             'Preisvergleich, Tiefstpreise und Preisalarm-Wishlist sind aktiv.',
           ),
@@ -687,16 +691,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         OutlinedButton.icon(
           onPressed: () => context.read<WishlistState>().disconnect(),
           icon: const Icon(Icons.link_off),
-          label: const Text('IsThereAnyDeal trennen'),
+          label: const Text('Eigenen Key trennen'),
         ),
       ] else ...[
-        Text(
-          'Zeigt Preisvergleiche und historische Tiefstpreise über alle '
-          'Stores hinweg und ermöglicht eine Wishlist mit Preisalarm. Ein '
-          'Key reicht — die Preisdaten sind für jeden Key identisch, ein '
-          'zweiter Account bringt hier keinen zusätzlichen Nutzen.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+        if (wishlist.isConnected)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.check_circle, color: Colors.green),
+              title: Text('Preisvergleich aktiv (gemeinsamer Key)'),
+              subtitle: Text(
+                'Funktioniert bereits ohne eigenen Key. Verbinde optional '
+                'deinen eigenen, falls das gemeinsame Kontingent mal knapp wird.',
+              ),
+            ),
+          )
+        else
+          Text(
+            'Zeigt Preisvergleiche und historische Tiefstpreise über alle '
+            'Stores hinweg und ermöglicht eine Wishlist mit Preisalarm.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: _openItadApiKeyPage,

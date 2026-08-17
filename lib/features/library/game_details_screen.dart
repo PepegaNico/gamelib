@@ -84,14 +84,16 @@ class _GameDetailsScreenState extends State<GameDetailsScreen> {
 
     setState(() => _loadingPrice = true);
     final match = await _itadApi.lookupBySteamAppId(
-      wishlist.apiKey!,
+      wishlist.effectiveApiKey!,
       widget.game.appId,
     );
     if (match == null) {
       if (mounted) setState(() => _loadingPrice = false);
       return;
     }
-    final prices = await _itadApi.getPrices(wishlist.apiKey!, [match.id]);
+    final prices = await _itadApi.getPrices(wishlist.effectiveApiKey!, [
+      match.id,
+    ]);
     if (!mounted) return;
     setState(() {
       _priceInfo = prices[match.id];
