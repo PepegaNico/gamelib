@@ -10,7 +10,6 @@ import 'core/notifications/background_price_check.dart';
 import 'features/auth/auth_state.dart';
 import 'features/auth/login_screen.dart';
 import 'features/epic/epic_state.dart';
-import 'features/friends/friends_state.dart';
 import 'features/itchio/itchio_state.dart';
 import 'features/library/library_screen.dart';
 import 'features/library/library_state.dart';
@@ -72,7 +71,6 @@ class GameLibApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthState()..restore()),
         ChangeNotifierProvider(create: (_) => LibraryState()),
-        ChangeNotifierProvider(create: (_) => FriendsState()),
         ChangeNotifierProvider(create: (_) => UpdatesState()),
         ChangeNotifierProvider(create: (_) => ItchioState()..restore()),
         ChangeNotifierProvider(create: (_) => EpicState()),

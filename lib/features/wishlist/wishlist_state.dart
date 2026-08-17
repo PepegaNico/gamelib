@@ -152,13 +152,22 @@ class WishlistState extends ChangeNotifier {
 
     try {
       final appIds = <int>{};
+      final diagnostics = <String>[];
       for (final account in accounts) {
-        appIds.addAll(
-          await _steamWishlistApi.getWishlistAppIds(
-            steamId: account.steamId,
-            apiKey: account.apiKey,
-          ),
+        final result = await _steamWishlistApi.getWishlistAppIds(
+          steamId: account.steamId,
+          apiKey: account.apiKey,
         );
+        appIds.addAll(result.appIds);
+        if (result.error != null) {
+          diagnostics.add('${account.personaName}: ${result.error}');
+        }
+      }
+
+      if (appIds.isEmpty) {
+        return diagnostics.isNotEmpty
+            ? 'Keine Steam-Wishlist-Spiele gefunden — ${diagnostics.join(' / ')}'
+            : 'Keine Spiele auf deiner Steam-Wishlist gefunden.';
       }
 
       steamImportTotal = appIds.length;

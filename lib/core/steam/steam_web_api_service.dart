@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'steam_achievement.dart';
-import 'steam_friend.dart';
 import 'steam_game.dart';
 import 'steam_news_item.dart';
 
@@ -144,60 +143,6 @@ class SteamWebApiService {
         );
       }).toList()
       ..sort((a, b) => (b.achieved ? 1 : 0).compareTo(a.achieved ? 1 : 0));
-  }
-
-  Future<List<String>> getFriendSteamIds({
-    required String apiKey,
-    required String steamId,
-  }) async {
-    final uri = Uri.parse('$_base/ISteamUser/GetFriendList/v1/').replace(
-      queryParameters: {
-        'key': apiKey,
-        'steamid': steamId,
-        'relationship': 'friend',
-      },
-    );
-
-    final response = await http.get(uri);
-    if (response.statusCode != 200) {
-      // Commonly 401 when the friends list itself is private.
-      return [];
-    }
-
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final friends = (body['friendslist']?['friends'] as List?) ?? [];
-    return friends
-        .cast<Map<String, dynamic>>()
-        .map((f) => f['steamid'] as String)
-        .toList();
-  }
-
-  Future<List<SteamFriend>> getPlayerSummaries({
-    required String apiKey,
-    required List<String> steamIds,
-  }) async {
-    if (steamIds.isEmpty) return [];
-
-    final results = <SteamFriend>[];
-    // The endpoint accepts up to 100 IDs per call.
-    for (var i = 0; i < steamIds.length; i += 100) {
-      final batch = steamIds.sublist(
-        i,
-        i + 100 > steamIds.length ? steamIds.length : i + 100,
-      );
-      final uri = Uri.parse(
-        '$_base/ISteamUser/GetPlayerSummaries/v2/',
-      ).replace(queryParameters: {'key': apiKey, 'steamids': batch.join(',')});
-      final response = await http.get(uri);
-      if (response.statusCode != 200) continue;
-
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      final players = (body['response']?['players'] as List?) ?? [];
-      results.addAll(
-        players.cast<Map<String, dynamic>>().map(SteamFriend.fromJson),
-      );
-    }
-    return results;
   }
 
   /// No API key required — this is a public endpoint.
