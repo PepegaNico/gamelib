@@ -264,6 +264,18 @@ class _WishlistList extends StatelessWidget {
     );
   }
 
+  void _openDealsSheet(
+    BuildContext context,
+    WishlistEntry entry,
+    ItadPriceInfo? price,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _DealsSheet(entry: entry, price: price),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (wishlist.entries.isEmpty) {
@@ -285,94 +297,99 @@ class _WishlistList extends StatelessWidget {
           color: isAlerted
               ? Theme.of(context).colorScheme.primaryContainer
               : null,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: 110,
-                    height: 52,
-                    child: entry.steamAppId != null
-                        ? CachedNetworkImage(
-                            imageUrl:
-                                'https://cdn.akamai.steamstatic.com/steam/apps/'
-                                '${entry.steamAppId}/header.jpg',
-                            fit: BoxFit.cover,
-                            errorWidget: (context, url, error) =>
-                                const _CoverPlaceholder(),
-                            placeholder: (context, url) => Container(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                            ),
-                          )
-                        : const _CoverPlaceholder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _openDealsSheet(context, entry, price),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 110,
+                      height: 52,
+                      child: entry.steamAppId != null
+                          ? CachedNetworkImage(
+                              imageUrl:
+                                  'https://cdn.akamai.steamstatic.com/steam/apps/'
+                                  '${entry.steamAppId}/header.jpg',
+                              fit: BoxFit.cover,
+                              errorWidget: (context, url, error) =>
+                                  const _CoverPlaceholder(),
+                              placeholder: (context, url) => Container(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                              ),
+                            )
+                          : const _CoverPlaceholder(),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (isAlerted)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 6),
-                              child: Icon(
-                                Icons.notifications_active,
-                                color: Colors.orange,
-                                size: 18,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (isAlerted)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Icon(
+                                  Icons.notifications_active,
+                                  color: Colors.orange,
+                                  size: 18,
+                                ),
+                              ),
+                            Expanded(
+                              child: Text(
+                                entry.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall,
                               ),
                             ),
-                          Expanded(
-                            child: Text(
-                              entry.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall,
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: 'Preisalarm setzen',
+                              icon: const Icon(
+                                Icons.notifications_outlined,
+                                size: 20,
+                              ),
+                              onPressed: () =>
+                                  _editTargetPrice(context, entry),
                             ),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Preisalarm setzen',
-                            icon: const Icon(
-                              Icons.notifications_outlined,
-                              size: 20,
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: 'Entfernen',
+                              icon: const Icon(Icons.delete_outline, size: 20),
+                              onPressed: () => context
+                                  .read<WishlistState>()
+                                  .remove(entry.itadGameId),
                             ),
-                            onPressed: () => _editTargetPrice(context, entry),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Entfernen',
-                            icon: const Icon(Icons.delete_outline, size: 20),
-                            onPressed: () => context
-                                .read<WishlistState>()
-                                .remove(entry.itadGameId),
-                          ),
-                        ],
-                      ),
-                      if (entry.targetPriceAmount != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Chip(
-                            visualDensity: VisualDensity.compact,
-                            label: Text(
-                              'Ziel: ${entry.targetPriceAmount!.toStringAsFixed(2)} €',
-                            ),
-                          ),
+                          ],
                         ),
-                      _DealsComparison(
-                        price: price,
-                        isLoading: wishlist.isLoading,
-                      ),
-                    ],
+                        if (entry.targetPriceAmount != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Chip(
+                              visualDensity: VisualDensity.compact,
+                              label: Text(
+                                'Ziel: ${entry.targetPriceAmount!.toStringAsFixed(2)} €',
+                              ),
+                            ),
+                          ),
+                        _BestPriceSummary(
+                          price: price,
+                          isLoading: wishlist.isLoading,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -397,11 +414,13 @@ class _CoverPlaceholder extends StatelessWidget {
   }
 }
 
-/// Lists the cheapest few shops for a wishlist entry so the whole point of
-/// tracking it — where it's cheapest right now, across stores — is visible
-/// at a glance instead of just a single "best price" line.
-class _DealsComparison extends StatelessWidget {
-  const _DealsComparison({required this.price, required this.isLoading});
+/// Shows just the single cheapest current offer on the wishlist card itself
+/// — tap the card to see every shop (see _DealsSheet). Keeping the card to
+/// one line avoids the previous top-3 list clashing with the all-time-low,
+/// which was often a different, no-longer-available price and read as
+/// "wrong" next to the current offers.
+class _BestPriceSummary extends StatelessWidget {
+  const _BestPriceSummary({required this.price, required this.isLoading});
 
   final ItadPriceInfo? price;
   final bool isLoading;
@@ -415,73 +434,154 @@ class _DealsComparison extends StatelessWidget {
         style: Theme.of(context).textTheme.bodySmall,
       );
     }
-    if (info.deals.isEmpty) {
+    final best = info.bestDeal;
+    if (best == null) {
       return Text(
         'Kein Angebot gefunden',
         style: Theme.of(context).textTheme.bodySmall,
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+    return Row(
       children: [
-        for (final deal in info.deals.take(3))
-          InkWell(
-            onTap: () => launchUrl(
-              Uri.parse(deal.url),
-              mode: LaunchMode.externalApplication,
+        Expanded(
+          child: Text(
+            best.shopName,
+            style: Theme.of(context).textTheme.bodySmall,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (best.cutPercent > 0) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      deal.shopName,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (deal.cutPercent > 0) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '-${deal.cutPercent}%',
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  Text(
-                    deal.price.formatted,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+            child: Text(
+              '-${best.cutPercent}%',
+              style: const TextStyle(
+                color: Colors.green,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-        if (info.historyLowAll != null)
-          Text(
-            'Tiefstpreis: ${info.historyLowAll!.formatted}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.outline,
-            ),
+          const SizedBox(width: 6),
+        ],
+        Text(
+          best.price.formatted,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        if (info.deals.length > 1) ...[
+          const SizedBox(width: 2),
+          Icon(
+            Icons.chevron_right,
+            size: 16,
+            color: Theme.of(context).colorScheme.outline,
           ),
+        ],
       ],
+    );
+  }
+}
+
+/// Full price comparison for one wishlist entry, opened by tapping its
+/// card — lists every offer ITAD found (not just the cheapest few), each
+/// tappable to open the shop. The all-time low is shown separately and
+/// clearly labeled, since it's a historical price that may no longer be
+/// available and previously got confused with the current offers.
+class _DealsSheet extends StatelessWidget {
+  const _DealsSheet({required this.entry, required this.price});
+
+  final WishlistEntry entry;
+  final ItadPriceInfo? price;
+
+  @override
+  Widget build(BuildContext context) {
+    final info = price;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                entry.title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (info?.historyLowAll != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Tiefster Preis aller Zeiten: '
+                  '${info!.historyLowAll!.formatted} '
+                  '(evtl. aktuell nicht mehr verfügbar)',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Expanded(
+                child: (info == null || info.deals.isEmpty)
+                    ? Center(
+                        child: Text(
+                          info == null
+                              ? 'Kein Preis gefunden'
+                              : 'Kein Angebot gefunden',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: scrollController,
+                        itemCount: info.deals.length,
+                        separatorBuilder: (context, index) =>
+                            const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final deal = info.deals[index];
+                          return ListTile(
+                            title: Text(deal.shopName),
+                            subtitle: deal.cutPercent > 0
+                                ? Text(
+                                    '-${deal.cutPercent}% · statt ${deal.regular.formatted}',
+                                  )
+                                : null,
+                            trailing: Text(
+                              deal.price.formatted,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            onTap: () => launchUrl(
+                              Uri.parse(deal.url),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
