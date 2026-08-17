@@ -214,11 +214,27 @@ class WishlistState extends ChangeNotifier {
         final syntheticId = 'steam:$appId';
 
         if (itadAvailable) {
+          ItadGameMatch? match;
           try {
-            final match = await _apiService.lookupBySteamAppId(
+            match = await _apiService.lookupBySteamAppId(
               effectiveApiKey!,
               appId,
             );
+          } on ItadApiException catch (e) {
+            // The key itself is confirmed invalid — no point retrying it for
+            // the rest of this run, fall through to the Steam-only path.
+            itadAvailable = false;
+            itadWarning =
+                'IsThereAnyDeal-Preisvergleich nicht verfügbar ($e) — '
+                'restliche Spiele wurden ohne Preise importiert.';
+          } catch (e) {
+            // A transient failure (network blip, timeout) for just this one
+            // game — leave ITAD enabled for the rest and simply retry this
+            // one on the next import pass instead of downgrading it.
+            continue;
+          }
+
+          if (itadAvailable) {
             if (match != null) {
               final realIndex = entries.indexWhere(
                 (e) => e.itadGameId == match.id,
@@ -279,11 +295,6 @@ class WishlistState extends ChangeNotifier {
               }
             }
             continue;
-          } catch (e) {
-            itadAvailable = false;
-            itadWarning =
-                'IsThereAnyDeal-Preisvergleich nicht verfügbar ($e) — '
-                'restliche Spiele wurden ohne Preise importiert.';
           }
         }
 
