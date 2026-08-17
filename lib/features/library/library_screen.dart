@@ -14,7 +14,6 @@ import '../../core/widgets/hover_lift.dart';
 import '../auth/auth_state.dart';
 import '../epic/epic_launch.dart';
 import '../epic/epic_state.dart';
-import '../friends/friends_screen.dart';
 import '../itchio/itchio_state.dart';
 import '../settings/settings_screen.dart';
 import '../store/store_search_screen.dart';
@@ -248,8 +247,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   _navigateTo(2, const WishlistScreen());
                 case 3:
                   _navigateTo(3, const UpdatesScreen());
-                case 4:
-                  _navigateTo(4, const FriendsScreen());
               }
             },
             destinations: [
@@ -281,11 +278,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 selectedIcon: const Icon(Icons.notifications),
                 label: const Text('Updates'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.people_outline),
-                selectedIcon: Icon(Icons.people),
-                label: Text('Freunde'),
               ),
             ],
           ),
