@@ -367,6 +367,8 @@ class WishlistState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      await _upgradeSyntheticEntries();
+
       // Entries imported without ITAD available carry a synthetic
       // "steam:<appid>" id (see importFromSteam) rather than a real ITAD
       // id — pointless to send those, ITAD won't recognize them.
@@ -383,5 +385,63 @@ class WishlistState extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Resolves leftover "steam:<appid>" placeholder entries to their real
+  /// ITAD id purely from their stored steamAppId — no Steam account or
+  /// wishlist re-scan needed. Runs on every price refresh, so it also
+  /// covers devices that never ran a full Steam import themselves (e.g.
+  /// entries that arrived here via Cloud-Sync from another device where
+  /// ITAD wasn't available yet, or this device simply has no Steam
+  /// account connected locally — importFromSteam alone can't reach those).
+  Future<void> _upgradeSyntheticEntries() async {
+    final pending = entries
+        .where(
+          (e) => e.itadGameId.startsWith('steam:') && e.steamAppId != null,
+        )
+        .toList();
+    if (pending.isEmpty) return;
+
+    var changed = false;
+    for (final entry in pending) {
+      ItadGameMatch? match;
+      try {
+        match = await _apiService.lookupBySteamAppId(
+          effectiveApiKey!,
+          entry.steamAppId!,
+        );
+      } on ItadApiException {
+        // Key genuinely invalid — no point retrying the rest right now.
+        break;
+      } catch (_) {
+        // Transient failure for this one — leave it, retry next refresh.
+        continue;
+      }
+      if (match == null) continue;
+
+      final resolved = match;
+      final realIndex = entries.indexWhere((e) => e.itadGameId == resolved.id);
+      if (realIndex != -1) {
+        // Already tracked under its real id too (duplicate) — drop the
+        // placeholder instead of overwriting the real entry.
+        entries = entries
+            .where((e) => e.itadGameId != entry.itadGameId)
+            .toList();
+      } else {
+        entries = [
+          for (final e in entries)
+            if (e.itadGameId == entry.itadGameId)
+              e.copyWith(
+                itadGameId: resolved.id,
+                title: resolved.title,
+                slug: resolved.slug,
+              )
+            else
+              e,
+        ];
+      }
+      changed = true;
+    }
+    if (changed) entriesUpdatedAt = await _store.saveAll(entries);
   }
 }
