@@ -21,6 +21,12 @@ class WishlistState extends ChangeNotifier {
 
   String? apiKey;
   List<WishlistEntry> entries = [];
+
+  /// When [entries] last changed locally — compared against the Cloud-Sync
+  /// copy's own timestamp to decide which side is newer (see
+  /// SyncState.sync). Starts at the epoch, meaning "never touched here".
+  DateTime entriesUpdatedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   Map<String, ItadPriceInfo> priceCache = {};
   bool isLoading = false;
   String? errorMessage;
@@ -38,7 +44,9 @@ class WishlistState extends ChangeNotifier {
 
   Future<void> restore() async {
     apiKey = await _credentialsStore.getApiKey();
-    entries = await _store.loadAll();
+    final loaded = await _store.load();
+    entries = loaded.entries;
+    entriesUpdatedAt = loaded.updatedAt;
     notifyListeners();
     if (isConnected && entries.isNotEmpty) await refreshPrices();
   }
@@ -74,14 +82,14 @@ class WishlistState extends ChangeNotifier {
         addedAt: DateTime.now(),
       ),
     ];
-    await _store.saveAll(entries);
+    entriesUpdatedAt = await _store.saveAll(entries);
     notifyListeners();
     if (isConnected) await refreshPrices();
   }
 
   Future<void> remove(String itadGameId) async {
     entries = entries.where((e) => e.itadGameId != itadGameId).toList();
-    await _store.saveAll(entries);
+    entriesUpdatedAt = await _store.saveAll(entries);
     notifyListeners();
   }
 
@@ -99,8 +107,22 @@ class WishlistState extends ChangeNotifier {
         else
           e,
     ];
-    await _store.saveAll(entries);
+    entriesUpdatedAt = await _store.saveAll(entries);
     notifyListeners();
+  }
+
+  /// Adopts a wishlist snapshot pulled from another device via Cloud-Sync.
+  /// Only called by SyncState once it's determined the remote copy is
+  /// actually newer than this device's own (see WishlistStore.replaceAll).
+  Future<void> applyRemote(
+    List<WishlistEntry> remoteEntries,
+    DateTime remoteUpdatedAt,
+  ) async {
+    entries = remoteEntries;
+    entriesUpdatedAt = remoteUpdatedAt;
+    await _store.replaceAll(remoteEntries, remoteUpdatedAt);
+    notifyListeners();
+    if (isConnected && entries.isNotEmpty) await refreshPrices();
   }
 
   Future<void> refreshPrices() async {
