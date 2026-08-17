@@ -38,14 +38,13 @@ class WishlistScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Wishlist & Preisalarm'),
         actions: [
-          if (wishlist.isConnected)
-            IconButton(
-              tooltip: 'Steam-Wishlist importieren',
-              onPressed: wishlist.isLoading
-                  ? null
-                  : () => _importFromSteam(context),
-              icon: const Icon(Icons.download_outlined),
-            ),
+          IconButton(
+            tooltip: 'Steam-Wishlist importieren',
+            onPressed: wishlist.isLoading
+                ? null
+                : () => _importFromSteam(context),
+            icon: const Icon(Icons.download_outlined),
+          ),
           if (wishlist.isConnected)
             IconButton(
               tooltip: 'Preise aktualisieren',
@@ -56,64 +55,72 @@ class WishlistScreen extends StatelessWidget {
             ),
         ],
       ),
-      body: !wishlist.isConnected
-          ? _NotConnected()
-          : Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: _AddGameField(),
-                ),
-                if (wishlist.isLoading && wishlist.steamImportTotal > 0)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      children: [
-                        LinearProgressIndicator(
-                          value:
-                              wishlist.steamImportDone /
-                              wishlist.steamImportTotal,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Importiere Steam-Wishlist… '
-                          '${wishlist.steamImportDone}/${wishlist.steamImportTotal}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
+      body: Column(
+        children: [
+          if (wishlist.isConnected)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: _AddGameField(),
+            )
+          else
+            _NoItadHint(),
+          if (wishlist.isLoading && wishlist.steamImportTotal > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  LinearProgressIndicator(
+                    value: wishlist.steamImportDone / wishlist.steamImportTotal,
                   ),
-                Expanded(child: _WishlistList(wishlist: wishlist)),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    'Importiere Steam-Wishlist… '
+                    '${wishlist.steamImportDone}/${wishlist.steamImportTotal}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
+          Expanded(child: _WishlistList(wishlist: wishlist)),
+        ],
+      ),
     );
   }
 }
 
-class _NotConnected extends StatelessWidget {
+/// Shown instead of the ITAD search-add field when IsThereAnyDeal isn't
+/// connected — the Steam-Wishlist import (AppBar button) works without it,
+/// this is purely about the extras ITAD adds (cross-store price comparison,
+/// manual add-by-search).
+class _NoItadHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.price_check, size: 48),
-            const SizedBox(height: 16),
-            const Text(
-              'Verbinde zuerst IsThereAnyDeal in den Einstellungen, um Preise zu verfolgen.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
-              child: const Text('Zu den Einstellungen'),
-            ),
-          ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Ohne IsThereAnyDeal siehst du hier nur die Spielnamen ohne '
+                  'Preisvergleich. Verbinde es in den Einstellungen für '
+                  'Preise über alle Stores hinweg und manuelles Hinzufügen.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
+                child: const Text('Einstellungen'),
+              ),
+            ],
+          ),
         ),
       ),
     );

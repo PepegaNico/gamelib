@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cupertino_http/cupertino_http.dart';
+
 import 'epic_store_listing.dart';
 
 /// The public, unauthenticated GraphQL endpoint that powers
@@ -10,22 +12,30 @@ import 'epic_store_listing.dart';
 /// The endpoint sits behind Cloudflare bot detection that fingerprints at
 /// the TLS layer (JA3/JA4), not just HTTP headers — verified that identical
 /// requests get a 403 challenge page from Dart's own HTTP client (BoringSSL
-/// via the Dart VM) but a clean 200 from curl.exe (Windows' native Schannel
-/// TLS stack) even with byte-identical headers. Rather than fight that at
-/// the socket level, requests are shelled out to the curl.exe bundled with
-/// Windows since 10 (1803), which Cloudflare doesn't flag.
+/// via the Dart VM) but a clean 200 from a platform-native TLS stack. Rather
+/// than fight that at the socket level, requests go through whichever
+/// native stack is available:
+/// - Windows: shells out to curl.exe (bundled since Windows 10 1803), which
+///   uses Schannel and isn't flagged.
+/// - iOS: uses `cupertino_http`, an official Flutter-team package that
+///   backs `package:http`'s Client with NSURLSession instead of the Dart
+///   VM's own stack.
+/// Neither is available on other platforms (no shell to spawn a subprocess
+/// on mobile in general, no NSURLSession outside Apple platforms) — Epic
+/// store search/deals just aren't available there for now.
 class EpicStoreApiService {
   static const _endpoint = 'https://store.epicgames.com/graphql';
 
-  static const _headers = {
-    'Content-Type: application/json',
-    'Accept: */*',
-    'Accept-Language: en-US,en;q=0.9',
-    'Origin: https://store.epicgames.com',
-    'Referer: https://store.epicgames.com/en-US/browse',
-    'sec-ch-ua: "Chromium";v="120", "Not?A_Brand";v="24"',
-    'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  static const _headers = <String, String>{
+    'Content-Type': 'application/json',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Origin': 'https://store.epicgames.com',
+    'Referer': 'https://store.epicgames.com/en-US/browse',
+    'sec-ch-ua': '"Chromium";v="120", "Not?A_Brand";v="24"',
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   };
 
   static const _searchQuery = r'''
@@ -68,19 +78,23 @@ query searchStoreQuery($allowCountries: String, $category: String, $count: Int, 
 }
 ''';
 
-  /// Posts a GraphQL request via curl.exe and returns the decoded JSON
-  /// body, or null if curl is missing, the request fails, or the response
-  /// isn't valid JSON (e.g. a Cloudflare challenge page slipping through).
-  ///
-  /// Windows-only: this shells out to curl.exe (see the class doc for why),
-  /// and mobile platforms can't spawn subprocesses at all — Epic store
-  /// search/deals just aren't available there for now.
+  /// Posts a GraphQL request via whichever native TLS stack is available
+  /// and returns the decoded JSON body, or null if none is available, the
+  /// request fails, or the response isn't valid JSON (e.g. a Cloudflare
+  /// challenge page slipping through).
   Future<Map<String, dynamic>?> _post(Map<String, dynamic> payload) async {
-    if (!Platform.isWindows) return null;
+    if (Platform.isWindows) return _postViaCurl(payload);
+    if (Platform.isIOS) return _postViaCupertinoHttp(payload);
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> _postViaCurl(
+    Map<String, dynamic> payload,
+  ) async {
     try {
       final args = <String>['-s', _endpoint];
-      for (final header in _headers) {
-        args.addAll(['-H', header]);
+      for (final entry in _headers.entries) {
+        args.addAll(['-H', '${entry.key}: ${entry.value}']);
       }
       args.addAll(['-d', jsonEncode(payload)]);
 
@@ -96,6 +110,29 @@ query searchStoreQuery($allowCountries: String, $category: String, $count: Int, 
       return jsonDecode(stdout) as Map<String, dynamic>;
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> _postViaCupertinoHttp(
+    Map<String, dynamic> payload,
+  ) async {
+    final client = CupertinoClient.defaultSessionConfiguration();
+    try {
+      final response = await client.post(
+        Uri.parse(_endpoint),
+        headers: _headers,
+        body: jsonEncode(payload),
+      );
+      if (response.statusCode != 200) return null;
+
+      final body = response.body.trim();
+      if (!body.startsWith('{')) return null;
+
+      return jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
     }
   }
 

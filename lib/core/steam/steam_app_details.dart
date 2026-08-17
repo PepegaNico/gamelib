@@ -1,4 +1,6 @@
 class SteamAppDetails {
+  final String? name;
+
   /// "game", "dlc", "demo", "music", "mod", "video", …
   final String? type;
   final String? shortDescription;
@@ -13,6 +15,7 @@ class SteamAppDetails {
   final List<String> screenshotUrls;
 
   SteamAppDetails({
+    required this.name,
     required this.type,
     required this.shortDescription,
     required this.genres,
@@ -50,6 +53,7 @@ class SteamAppDetails {
     final supportedLanguages = (data['supported_languages'] as String?) ?? '';
 
     return SteamAppDetails(
+      name: data['name'] as String?,
       type: data['type'] as String?,
       shortDescription: data['short_description'] as String?,
       genres: genres,
