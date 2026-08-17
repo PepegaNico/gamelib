@@ -9,6 +9,7 @@ import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
 import '../sync/qr_export_screen.dart';
 import '../sync/qr_import_screen.dart';
+import '../sync/sync_state.dart';
 import '../wishlist/wishlist_state.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -33,12 +34,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _itadController = TextEditingController();
   bool _connectingItad = false;
 
+  final _syncEmailController = TextEditingController();
+  final _syncPasswordController = TextEditingController();
+  bool _syncIsRegistering = false;
+
   @override
   void dispose() {
     _steamController.dispose();
     _addSteamController.dispose();
     _itchioController.dispose();
     _itadController.dispose();
+    _syncEmailController.dispose();
+    _syncPasswordController.dispose();
     super.dispose();
   }
 
@@ -108,6 +115,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _itadController.clear();
   }
 
+  Future<void> _submitSyncAuth() async {
+    final email = _syncEmailController.text.trim();
+    final password = _syncPasswordController.text;
+    if (email.isEmpty || password.isEmpty) return;
+
+    final sync = context.read<SyncState>();
+    final error = _syncIsRegistering
+        ? await sync.register(email, password)
+        : await sync.login(email, password);
+    if (!mounted || error != null) return;
+
+    _syncEmailController.clear();
+    _syncPasswordController.clear();
+    await _runSync();
+  }
+
+  Future<void> _runSync() async {
+    final sync = context.read<SyncState>();
+    final error = await sync.sync(
+      auth: context.read<AuthState>(),
+      itchio: context.read<ItchioState>(),
+      wishlist: context.read<WishlistState>(),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error ?? 'Synchronisiert.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
@@ -123,6 +159,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _buildCloudSyncSection(),
+                const SizedBox(height: 32),
+                const Divider(),
+                const SizedBox(height: 32),
                 _buildSyncSection(),
                 const SizedBox(height: 32),
                 const Divider(),
@@ -145,6 +185,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCloudSyncSection() {
+    final sync = context.watch<SyncState>();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.cloud_sync_outlined),
+            const SizedBox(width: 8),
+            Text('Cloud-Sync', style: Theme.of(context).textTheme.titleLarge),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (sync.status == SyncStatus.loggedIn) ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.check_circle, color: Colors.green),
+            title: Text('Angemeldet als ${sync.email}'),
+            subtitle: const Text(
+              'Verbundene Konten werden mit deinen anderen Geräten abgeglichen.',
+            ),
+          ),
+          if (sync.errorMessage != null) ...[
+            Text(
+              sync.errorMessage!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 8),
+          ],
+          FilledButton.icon(
+            onPressed: sync.isBusy ? null : _runSync,
+            icon: sync.isBusy
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            label: const Text('Jetzt synchronisieren'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.read<SyncState>().logout(),
+            icon: const Icon(Icons.logout),
+            label: const Text('Abmelden'),
+          ),
+        ] else ...[
+          Text(
+            'Meldet dich mit einem GameLib-Konto an, damit verbundene Steam-/'
+            'itch.io-/IsThereAnyDeal-Konten automatisch mit deinen anderen '
+            'Geräten abgeglichen werden — ohne QR-Code, im Hintergrund bei '
+            'jedem Aktualisieren.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _syncEmailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'E-Mail',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _syncPasswordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Passwort (mind. 6 Zeichen)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          if (sync.errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              sync.errorMessage!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: sync.isBusy ? null : _submitSyncAuth,
+            child: sync.isBusy
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(_syncIsRegistering ? 'Konto erstellen' : 'Anmelden'),
+          ),
+          TextButton(
+            onPressed: () =>
+                setState(() => _syncIsRegistering = !_syncIsRegistering),
+            child: Text(
+              _syncIsRegistering
+                  ? 'Ich habe schon ein Konto'
+                  : 'Neues Konto erstellen',
+            ),
+          ),
+        ],
+      ],
     );
   }
 

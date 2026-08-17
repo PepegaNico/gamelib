@@ -1,0 +1,178 @@
+import 'package:flutter/foundation.dart';
+
+import '../../core/sync/firebase_auth_service.dart';
+import '../../core/sync/firestore_sync_service.dart';
+import '../../core/sync/qr_credentials_payload.dart';
+import '../../core/sync/sync_credentials_store.dart';
+import '../auth/auth_state.dart';
+import '../itchio/itchio_state.dart';
+import '../wishlist/wishlist_state.dart';
+
+enum SyncStatus { unknown, loggedOut, loggedIn }
+
+/// Cloud-Sync via a Firebase account: lets the same connected Steam/itch.io/
+/// IsThereAnyDeal credentials show up on every device the user logs into,
+/// instead of re-entering them on each one — the same data the QR-code
+/// transfer moves between two devices in person, just kept converged
+/// automatically through the cloud.
+class SyncState extends ChangeNotifier {
+  SyncState({
+    FirebaseAuthService? authService,
+    FirestoreSyncService? syncService,
+    SyncCredentialsStore? store,
+  }) : _authService = authService ?? FirebaseAuthService(),
+       _syncService = syncService ?? FirestoreSyncService(),
+       _store = store ?? SyncCredentialsStore.instance;
+
+  final FirebaseAuthService _authService;
+  final FirestoreSyncService _syncService;
+  final SyncCredentialsStore _store;
+
+  SyncStatus status = SyncStatus.unknown;
+  String? email;
+  String? errorMessage;
+  bool isBusy = false;
+
+  String? _uid;
+  String? _idToken;
+  String? _refreshToken;
+  DateTime? _idTokenExpiresAt;
+
+  Future<void> restore() async {
+    final saved = await _store.read();
+    if (saved == null) {
+      status = SyncStatus.loggedOut;
+      notifyListeners();
+      return;
+    }
+    _uid = saved.uid;
+    email = saved.email;
+    _refreshToken = saved.refreshToken;
+    status = SyncStatus.loggedIn;
+    notifyListeners();
+  }
+
+  Future<String?> register(String email, String password) =>
+      _authenticate(() => _authService.signUp(email, password), email);
+
+  Future<String?> login(String email, String password) =>
+      _authenticate(() => _authService.signIn(email, password), email);
+
+  Future<String?> _authenticate(
+    Future<FirebaseAuthResult> Function() action,
+    String email,
+  ) async {
+    isBusy = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await action();
+      _uid = result.uid;
+      _idToken = result.idToken;
+      _refreshToken = result.refreshToken;
+      _idTokenExpiresAt = result.expiresAt;
+      this.email = email;
+      await _store.save(
+        uid: result.uid,
+        email: email,
+        refreshToken: result.refreshToken,
+      );
+      status = SyncStatus.loggedIn;
+      return null;
+    } catch (e) {
+      errorMessage = e.toString();
+      return errorMessage;
+    } finally {
+      isBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> logout() async {
+    await _store.clear();
+    _uid = null;
+    _idToken = null;
+    _refreshToken = null;
+    _idTokenExpiresAt = null;
+    email = null;
+    status = SyncStatus.loggedOut;
+    notifyListeners();
+  }
+
+  Future<String> _validIdToken() async {
+    if (_idToken != null &&
+        _idTokenExpiresAt != null &&
+        DateTime.now().isBefore(
+          _idTokenExpiresAt!.subtract(const Duration(minutes: 1)),
+        )) {
+      return _idToken!;
+    }
+    final result = await _authService.refresh(
+      refreshToken: _refreshToken!,
+      fallbackUid: _uid!,
+    );
+    _idToken = result.idToken;
+    _idTokenExpiresAt = result.expiresAt;
+    _refreshToken = result.refreshToken;
+    await _store.save(uid: _uid!, email: email!, refreshToken: _refreshToken!);
+    return _idToken!;
+  }
+
+  /// Pulls the cloud state and merges it into the given local states first
+  /// (so accounts added on another device show up here), then pushes the
+  /// resulting, now-merged local state back up — running this on either
+  /// device converges both to the union of connected accounts.
+  Future<String?> sync({
+    required AuthState auth,
+    required ItchioState itchio,
+    required WishlistState wishlist,
+  }) async {
+    if (status != SyncStatus.loggedIn) return 'Nicht angemeldet.';
+
+    isBusy = true;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final token = await _validIdToken();
+
+      final remoteJson = await _syncService.download(idToken: token, uid: _uid!);
+      if (remoteJson != null) {
+        final remote = QrCredentialsPayload.decode(remoteJson);
+        for (final account in remote.steamAccounts) {
+          await auth.importAccount(
+            steamId: account.steamId,
+            apiKey: account.apiKey,
+          );
+        }
+        for (final key in remote.itchioApiKeys) {
+          await itchio.addAccount(key);
+        }
+        if (remote.itadApiKey != null && !wishlist.isConnected) {
+          await wishlist.connect(remote.itadApiKey!);
+        }
+      }
+
+      final local = QrCredentialsPayload(
+        steamAccounts: [
+          for (final a in auth.accounts) (steamId: a.steamId, apiKey: a.apiKey),
+        ],
+        itchioApiKeys: [for (final a in itchio.accounts) a.apiKey],
+        itadApiKey: wishlist.apiKey,
+      );
+      await _syncService.upload(
+        idToken: token,
+        uid: _uid!,
+        payloadJson: local.encode(),
+      );
+      return null;
+    } catch (e) {
+      errorMessage = 'Sync fehlgeschlagen: $e';
+      return errorMessage;
+    } finally {
+      isBusy = false;
+      notifyListeners();
+    }
+  }
+}
