@@ -2,38 +2,37 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-/// Steam's wishlist page ships its data as plain, unauthenticated JSON —
-/// there's no official Web API equivalent, but this is the same endpoint
-/// Steam's own store website uses internally and it's been stable for
-/// years. Only works if the profile's wishlist is set to public (same
-/// privacy setting as the rest of the profile this app already reads).
+/// Steam's official Web API wishlist endpoint. The older approach of
+/// scraping `store.steampowered.com/wishlist/profiles/.../wishlistdata/`
+/// has become unreliable (Steam has tightened access to that page over
+/// time) — IWishlistService is the current, documented replacement and
+/// needs no more than the public SteamID64.
 class SteamWishlistApiService {
-  static const _maxPages = 20; // 100 games/page — safety cap, not a real limit
+  static const _base =
+      'https://api.steampowered.com/IWishlistService/GetWishlist/v1/';
 
-  Future<List<int>> getWishlistAppIds(String steamId) async {
-    final appIds = <int>[];
+  Future<List<int>> getWishlistAppIds({
+    required String steamId,
+    String? apiKey,
+  }) async {
+    final uri = Uri.parse(_base).replace(
+      queryParameters: {
+        'steamid': steamId,
+        if (apiKey != null && apiKey.isNotEmpty) 'key': apiKey,
+      },
+    );
 
-    for (var page = 0; page < _maxPages; page++) {
-      final uri = Uri.parse(
-        'https://store.steampowered.com/wishlist/profiles/$steamId/wishlistdata/',
-      ).replace(queryParameters: {'p': '$page'});
+    final response = await http.get(uri);
+    if (response.statusCode != 200) return [];
 
-      final response = await http.get(uri);
-      if (response.statusCode != 200) break;
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = (body['response'] as Map<String, dynamic>?)?['items'] as List?;
+    if (items == null) return [];
 
-      final body = response.body.trim();
-      if (body.isEmpty || body == '[]') break;
-
-      final decoded = jsonDecode(body);
-      if (decoded is! Map<String, dynamic> || decoded.isEmpty) break;
-
-      for (final key in decoded.keys) {
-        final id = int.tryParse(key);
-        if (id != null) appIds.add(id);
-      }
-      if (decoded.length < 100) break; // last page
-    }
-
-    return appIds;
+    return items
+        .cast<Map<String, dynamic>>()
+        .map((item) => item['appid'] as int?)
+        .whereType<int>()
+        .toList();
   }
 }

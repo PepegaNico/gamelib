@@ -17,8 +17,6 @@ import '../epic/epic_state.dart';
 import '../friends/friends_screen.dart';
 import '../itchio/itchio_state.dart';
 import '../settings/settings_screen.dart';
-import '../stats/stats_screen.dart';
-import '../stats/stats_state.dart';
 import '../store/store_search_screen.dart';
 import '../sync/sync_state.dart';
 import '../updates/updates_screen.dart';
@@ -117,7 +115,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     unawaited(context.read<UpdatesState>().checkForUpdates(library.steamGames));
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
-    unawaited(context.read<StatsState>().recordSnapshot(library.steamGames));
     unawaited(wishlist.refreshPrices());
   }
 
@@ -252,9 +249,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 case 3:
                   _navigateTo(3, const UpdatesScreen());
                 case 4:
-                  _navigateTo(4, const StatsScreen());
-                case 5:
-                  _navigateTo(5, const FriendsScreen());
+                  _navigateTo(4, const FriendsScreen());
               }
             },
             destinations: [
@@ -286,11 +281,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 selectedIcon: const Icon(Icons.notifications),
                 label: const Text('Updates'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.query_stats_outlined),
-                selectedIcon: Icon(Icons.query_stats),
-                label: Text('Statistik'),
               ),
               const NavigationRailDestination(
                 icon: Icon(Icons.people_outline),

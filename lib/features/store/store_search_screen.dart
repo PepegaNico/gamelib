@@ -227,7 +227,6 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
               controller: _controller,
-              autofocus: true,
               onSubmitted: _search,
               onChanged: (value) {
                 if (value.trim().isEmpty && _currentQuery != null) _loadDeals();

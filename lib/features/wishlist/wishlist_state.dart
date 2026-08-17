@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/itad/itad_api_service.dart';
 import '../../core/itad/itad_credentials_store.dart';
 import '../../core/itad/itad_models.dart';
+import '../../core/steam/steam_account.dart';
 import '../../core/steam/steam_wishlist_api_service.dart';
 import '../../core/wishlist/wishlist_entry.dart';
 import '../../core/wishlist/wishlist_store.dart';
@@ -140,7 +141,7 @@ class WishlistState extends ChangeNotifier {
   /// cross-store price comparison as anything added manually — ITAD covers
   /// Epic/GOG/etc. prices too, not just Steam). Returns an error message on
   /// failure, or null on success (even if zero new games were found).
-  Future<String?> importFromSteam(List<String> steamIds) async {
+  Future<String?> importFromSteam(List<SteamAccount> accounts) async {
     if (!isConnected) {
       return 'Erst IsThereAnyDeal in den Einstellungen verbinden.';
     }
@@ -151,8 +152,13 @@ class WishlistState extends ChangeNotifier {
 
     try {
       final appIds = <int>{};
-      for (final steamId in steamIds) {
-        appIds.addAll(await _steamWishlistApi.getWishlistAppIds(steamId));
+      for (final account in accounts) {
+        appIds.addAll(
+          await _steamWishlistApi.getWishlistAppIds(
+            steamId: account.steamId,
+            apiKey: account.apiKey,
+          ),
+        );
       }
 
       steamImportTotal = appIds.length;

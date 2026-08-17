@@ -23,9 +23,7 @@ class WishlistScreen extends StatelessWidget {
       return;
     }
 
-    final error = await wishlist.importFromSteam(
-      [for (final a in auth.accounts) a.steamId],
-    );
+    final error = await wishlist.importFromSteam(auth.accounts);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(error ?? 'Steam-Wishlist importiert.')),
