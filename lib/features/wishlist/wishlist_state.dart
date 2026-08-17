@@ -4,6 +4,7 @@ import '../../core/itad/itad_api_service.dart';
 import '../../core/itad/itad_credentials_store.dart';
 import '../../core/itad/itad_models.dart';
 import '../../core/steam/steam_account.dart';
+import '../../core/steam/steam_store_api_service.dart';
 import '../../core/steam/steam_wishlist_api_service.dart';
 import '../../core/wishlist/wishlist_entry.dart';
 import '../../core/wishlist/wishlist_store.dart';
@@ -14,15 +15,18 @@ class WishlistState extends ChangeNotifier {
     ItadCredentialsStore? credentialsStore,
     WishlistStore? store,
     SteamWishlistApiService? steamWishlistApi,
+    SteamStoreApiService? steamStoreApi,
   }) : _apiService = apiService ?? ItadApiService(),
        _credentialsStore = credentialsStore ?? ItadCredentialsStore.instance,
        _store = store ?? WishlistStore(),
-       _steamWishlistApi = steamWishlistApi ?? SteamWishlistApiService();
+       _steamWishlistApi = steamWishlistApi ?? SteamWishlistApiService(),
+       _steamStoreApi = steamStoreApi ?? SteamStoreApiService();
 
   final ItadApiService _apiService;
   final ItadCredentialsStore _credentialsStore;
   final WishlistStore _store;
   final SteamWishlistApiService _steamWishlistApi;
+  final SteamStoreApiService _steamStoreApi;
 
   /// Set by [importFromSteam] while it works through (potentially many)
   /// Steam wishlist games one lookup at a time, so the UI can show progress.
@@ -136,16 +140,15 @@ class WishlistState extends ChangeNotifier {
   }
 
   /// Imports every game on the given Steam accounts' public wishlists that
-  /// isn't already tracked here, matching each Steam appid to its
-  /// IsThereAnyDeal entry (so the resulting wishlist entries get the same
-  /// cross-store price comparison as anything added manually — ITAD covers
-  /// Epic/GOG/etc. prices too, not just Steam). Returns an error message on
-  /// failure, or null on success (even if zero new games were found).
+  /// isn't already tracked here. Doesn't require IsThereAnyDeal — when it's
+  /// connected, each Steam appid is matched to its ITAD entry for cross-store
+  /// price comparison (Epic/GOG/etc., not just Steam); when it's not (or it
+  /// stops working partway through, e.g. an invalid key), games are added
+  /// with just their Steam name/appid instead of being blocked entirely.
+  /// Returns an error message on failure, or null on success (even if zero
+  /// new games were found) — a null return with entries added but no price
+  /// data means ITAD wasn't available for some or all of them.
   Future<String?> importFromSteam(List<SteamAccount> accounts) async {
-    if (!isConnected) {
-      return 'Erst IsThereAnyDeal in den Einstellungen verbinden.';
-    }
-
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -175,20 +178,50 @@ class WishlistState extends ChangeNotifier {
       notifyListeners();
 
       var added = 0;
+      // Starts true only if a key is actually set; flips to false for the
+      // rest of the run the moment a lookup fails (e.g. invalid key) so one
+      // broken ITAD connection doesn't abort the whole import.
+      var itadAvailable = isConnected;
+      String? itadWarning;
+
       for (final appId in appIds) {
         steamImportDone++;
         if (steamImportDone % 5 == 0) notifyListeners();
 
-        final match = await _apiService.lookupBySteamAppId(apiKey!, appId);
-        if (match == null || entries.any((e) => e.itadGameId == match.id)) {
-          continue;
+        if (itadAvailable) {
+          try {
+            final match = await _apiService.lookupBySteamAppId(apiKey!, appId);
+            if (match != null && !entries.any((e) => e.itadGameId == match.id)) {
+              entries = [
+                ...entries,
+                WishlistEntry(
+                  itadGameId: match.id,
+                  title: match.title,
+                  slug: match.slug,
+                  targetPriceAmount: null,
+                  addedAt: DateTime.now(),
+                ),
+              ];
+              added++;
+            }
+            continue;
+          } catch (e) {
+            itadAvailable = false;
+            itadWarning =
+                'IsThereAnyDeal-Preisvergleich nicht verfügbar ($e) — '
+                'restliche Spiele wurden ohne Preise importiert.';
+          }
         }
+
+        final fallbackId = 'steam:$appId';
+        if (entries.any((e) => e.itadGameId == fallbackId)) continue;
+        final details = await _steamStoreApi.getAppDetails(appId);
         entries = [
           ...entries,
           WishlistEntry(
-            itadGameId: match.id,
-            title: match.title,
-            slug: match.slug,
+            itadGameId: fallbackId,
+            title: details?.name ?? 'Steam-App $appId',
+            slug: '',
             targetPriceAmount: null,
             addedAt: DateTime.now(),
           ),
@@ -197,8 +230,8 @@ class WishlistState extends ChangeNotifier {
       }
 
       entriesUpdatedAt = await _store.saveAll(entries);
-      if (added > 0) await refreshPrices();
-      return null;
+      if (added > 0 && isConnected) await refreshPrices();
+      return itadWarning;
     } catch (e) {
       errorMessage = 'Steam-Wishlist-Import fehlgeschlagen: $e';
       return errorMessage;
@@ -217,10 +250,16 @@ class WishlistState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      priceCache = await _apiService.getPrices(
-        apiKey!,
-        entries.map((e) => e.itadGameId).toList(),
-      );
+      // Entries imported without ITAD available carry a synthetic
+      // "steam:<appid>" id (see importFromSteam) rather than a real ITAD
+      // id — pointless to send those, ITAD won't recognize them.
+      final realIds = entries
+          .map((e) => e.itadGameId)
+          .where((id) => !id.startsWith('steam:'))
+          .toList();
+      if (realIds.isEmpty) return;
+
+      priceCache = await _apiService.getPrices(apiKey!, realIds);
     } catch (e) {
       errorMessage = 'Preise konnten nicht geladen werden: $e';
     } finally {

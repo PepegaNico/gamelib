@@ -204,6 +204,7 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
   }
 
   List<_StoreResult> get _visibleResults => _results.where((r) {
+    if (!_selectedStores.contains(r.platform)) return false;
     if (r.isDlc && !_showDlc) return false;
     if (r.isDemo && !_showDemos) return false;
     if (_selectedGenres.isNotEmpty && !r.genres.any(_selectedGenres.contains)) {
