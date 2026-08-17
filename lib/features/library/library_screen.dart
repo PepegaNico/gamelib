@@ -114,10 +114,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     unawaited(context.read<UpdatesState>().checkForUpdates(library.steamGames));
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
-    unawaited(wishlist.refreshPrices());
-    if (auth.accounts.isNotEmpty) {
-      unawaited(wishlist.importFromSteam(auth.accounts));
-    }
+    // Import first, then refresh prices — importing can upgrade Steam-only
+    // placeholder entries to real ITAD ids, which refreshPrices needs to see
+    // to fetch their prices. Running them concurrently raced the two.
+    unawaited(() async {
+      if (auth.accounts.isNotEmpty) {
+        await wishlist.importFromSteam(auth.accounts);
+      }
+      await wishlist.refreshPrices();
+    }());
   }
 
   List<LibraryGame> _applyFiltersAndSort(
