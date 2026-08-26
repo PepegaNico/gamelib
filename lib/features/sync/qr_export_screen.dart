@@ -7,6 +7,7 @@ import '../../core/sync/qr_credentials_payload.dart';
 import '../auth/auth_state.dart';
 import '../itchio/itchio_state.dart';
 import '../wishlist/wishlist_state.dart';
+import 'sync_state.dart';
 
 /// Shows a QR code encoding every connected account's credentials so
 /// another device can scan it (see QrImportScreen) instead of re-entering
@@ -19,6 +20,7 @@ class QrExportScreen extends StatelessWidget {
     final auth = context.watch<AuthState>();
     final itchio = context.watch<ItchioState>();
     final wishlist = context.watch<WishlistState>();
+    final sync = context.watch<SyncState>();
 
     final payload = QrCredentialsPayload(
       steamAccounts: [
@@ -26,6 +28,7 @@ class QrExportScreen extends StatelessWidget {
       ],
       itchioApiKeys: [for (final a in itchio.accounts) a.apiKey],
       itadApiKey: wishlist.apiKey,
+      syncRefreshToken: sync.refreshTokenForPairing,
     );
 
     return Scaffold(
@@ -68,7 +71,8 @@ class QrExportScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       Text(
                         '${auth.accounts.length} Steam-, ${itchio.accounts.length} '
-                        'itch.io-Konto(en)${wishlist.hasOwnKey ? " + IsThereAnyDeal" : ""}',
+                        'itch.io-Konto(en)${wishlist.hasOwnKey ? " + IsThereAnyDeal" : ""}'
+                        '${sync.refreshTokenForPairing != null ? " + Cloud-Sync (z.B. Epic-Bibliothek)" : ""}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 16),
