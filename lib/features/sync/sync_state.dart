@@ -50,6 +50,13 @@ class SyncState extends ChangeNotifier {
   /// this (see LibraryScreen._refresh).
   List<EpicGame> syncedEpicGames = [];
 
+  /// The current Firebase refresh token, for embedding in the QR-code
+  /// pairing payload so another device (e.g. the native iOS app) can join
+  /// the same Cloud-Sync account without typing an email/password — see
+  /// QrCredentialsPayload.syncRefreshToken. Null unless actually logged in.
+  String? get refreshTokenForPairing =>
+      status == SyncStatus.loggedIn ? _refreshToken : null;
+
   Future<void> restore() async {
     final saved = await _store.read();
     if (saved == null) {
