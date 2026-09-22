@@ -1,30 +1,28 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_theme.dart';
-import '../../core/epic/epic_game.dart';
 import '../../core/models/game_platform.dart';
 import '../../core/models/library_game.dart';
 import '../../core/steam/steam_app_details.dart';
 import '../../core/steam/steam_game.dart';
+import '../../core/wishlist/wishlist_entry.dart';
 import '../../core/widgets/hover_lift.dart';
 import '../auth/auth_state.dart';
-import '../epic/epic_launch.dart';
 import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
-import '../settings/settings_screen.dart';
-import '../store/store_search_screen.dart';
+import '../shell/app_shell.dart';
 import '../sync/sync_state.dart';
-import '../updates/updates_screen.dart';
 import '../updates/updates_state.dart';
-import '../wishlist/wishlist_screen.dart';
 import '../wishlist/wishlist_state.dart';
-import 'backlog_picker.dart';
+import '../xbox/xbox_state.dart';
 import 'game_details_dispatch.dart';
+import 'launch_game.dart';
 import 'library_state.dart';
 
 enum _SortMode { playtimeDesc, nameAsc, lastPlayedDesc }
@@ -46,6 +44,7 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   String _query = '';
   _SortMode _sortMode = _SortMode.playtimeDesc;
   bool _onlyPlayed = false;
@@ -53,11 +52,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
   bool _onlyControllerSupport = false;
   bool _onlyGerman = false;
   final Set<GamePlatform> _selectedPlatforms = {...GamePlatform.values};
-  int _railIndex = 0;
-
-  /// Null until the user explicitly toggles it, so the sidebar defaults to
-  /// expanded on wide (desktop) windows and collapsed on narrow (phone) ones.
-  bool? _menuExpanded;
 
   int get _activeFilterCount {
     var count = 0;
@@ -78,6 +72,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -88,15 +83,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final epic = context.read<EpicState>();
     final wishlist = context.read<WishlistState>();
     final sync = context.read<SyncState>();
+    final xbox = context.read<XboxState>();
 
     // Epic first — its own scan has to finish before sync() runs, since
     // sync() decides whether to push or pull the Epic snapshot based on
     // whether this device found anything locally (see SyncState.sync).
-    await epic.refresh();
+    // Same for Xbox/Microsoft Store.
+    await Future.wait([epic.refresh(), xbox.refresh()]);
     if (!mounted) return;
 
     if (sync.status == SyncStatus.loggedIn) {
-      await sync.sync(auth: auth, itchio: itchio, wishlist: wishlist, epic: epic);
+      await sync.sync(
+        auth: auth,
+        itchio: itchio,
+        wishlist: wishlist,
+        epic: epic,
+        xbox: xbox,
+      );
       if (!mounted) return;
     }
 
@@ -111,7 +114,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (!mounted) return;
 
     library.setItchioGames(itchio.games);
-    library.setEpicGames(epic.games.isNotEmpty ? epic.games : sync.syncedEpicGames);
+    library.setEpicGames(
+      epic.games.isNotEmpty ? epic.games : sync.syncedEpicGames,
+    );
+    library.setXboxGames(
+      xbox.games.isNotEmpty ? xbox.games : sync.syncedXboxGames,
+    );
     unawaited(context.read<UpdatesState>().checkForUpdates(library.steamGames));
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
@@ -181,215 +189,178 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return list;
   }
 
-  void _navigateTo(int index, Widget screen) {
-    setState(() => _railIndex = index);
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => screen))
-        .then((_) {
-          if (mounted) setState(() => _railIndex = 0);
-        });
+  /// Search, filters or a non-default sort hide the hero and the
+  /// "Weiter spielen"/alert rows, so results start right at the top.
+  bool get _isFiltering => _query.isNotEmpty || _activeFilterCount > 0;
+
+  void _togglePlatformOnly(GamePlatform platform) {
+    setState(() {
+      final onlyThis =
+          _selectedPlatforms.length == 1 &&
+          _selectedPlatforms.contains(platform);
+      _selectedPlatforms.clear();
+      if (onlyThis) {
+        _selectedPlatforms.addAll(GamePlatform.values);
+      } else {
+        _selectedPlatforms.add(platform);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthState>();
     final library = context.watch<LibraryState>();
-    final wishlistAlerts = context.watch<WishlistState>().alertedEntries.length;
-    final updatesUnread = context.watch<UpdatesState>().unreadCount;
+    final wishlist = context.watch<WishlistState>();
     final filtered = _applyFiltersAndSort(
       library.games,
       library.appDetailsCache,
     );
-    final menuExpanded =
-        _menuExpanded ?? MediaQuery.of(context).size.width >= 700;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: menuExpanded ? 'Menü einklappen' : 'Menü ausklappen',
-          icon: Icon(menuExpanded ? Icons.menu_open : Icons.menu),
-          onPressed: () => setState(() => _menuExpanded = !menuExpanded),
-        ),
-        title: const Text('GameZer'),
-        actions: [
-          if (auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: Tooltip(
-                message: auth.personaName ?? 'Konto',
-                child: CircleAvatar(
-                  backgroundImage: NetworkImage(auth.avatarUrl!),
-                  radius: 14,
-                ),
-              ),
-            ),
-          IconButton(
-            tooltip: 'Aktualisieren',
-            onPressed: library.isLoading ? null : _refresh,
-            icon: const Icon(Icons.refresh_outlined),
-          ),
-          IconButton(
-            tooltip: 'Einstellungen',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-          IconButton(
-            tooltip: 'Abmelden',
-            onPressed: () => context.read<AuthState>().signOut(),
-            icon: const Icon(Icons.logout_outlined),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Row(
-        children: [
-          if (menuExpanded) ...[
-          NavigationRail(
-            selectedIndex: _railIndex,
-            labelType: NavigationRailLabelType.all,
-            onDestinationSelected: (index) {
-              switch (index) {
-                case 0:
-                  setState(() => _railIndex = 0);
-                case 1:
-                  _navigateTo(1, const StoreSearchScreen());
-                case 2:
-                  _navigateTo(2, const WishlistScreen());
-                case 3:
-                  _navigateTo(3, const UpdatesScreen());
-              }
-            },
-            destinations: [
-              const NavigationRailDestination(
-                icon: Icon(Icons.videogame_asset_outlined),
-                selectedIcon: Icon(Icons.videogame_asset_outlined),
-                label: Text('Bibliothek'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.storefront_outlined),
-                selectedIcon: Icon(Icons.storefront_outlined),
-                label: Text('Store'),
-              ),
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: wishlistAlerts > 0,
-                  label: Text('$wishlistAlerts'),
-                  backgroundColor: Colors.orange,
-                  child: const Icon(Icons.favorite_border),
-                ),
-                selectedIcon: const Icon(Icons.favorite_border),
-                label: const Text('Wishlist'),
-              ),
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: updatesUnread > 0,
-                  label: Text('$updatesUnread'),
-                  child: const Icon(Icons.notifications_outlined),
-                ),
-                selectedIcon: const Icon(Icons.notifications_outlined),
-                label: const Text('Updates'),
-              ),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () =>
+            _searchFocus.requestFocus(),
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+            _searchFocus.requestFocus(),
+        const SingleActivator(LogicalKeyboardKey.f5): _refresh,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          body: Column(
+            children: [
+              _buildHeader(library),
+              Expanded(child: _buildBody(library, filtered, wishlist)),
             ],
           ),
-          const VerticalDivider(width: 1),
-          ],
-          Expanded(
-            child: Column(
-              children: [
-                _buildSearchAndFilterBar(library),
-                if (!library.isLoading && library.games.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 4,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${filtered.length} von ${library.games.length} Spielen',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ),
-                Expanded(child: _buildBody(library, filtered)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
-      floatingActionButton: library.games.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => showBacklogPicker(context, library.games),
-              backgroundColor: zerAccent,
-              foregroundColor: zerOnAccent,
-              shape: const StadiumBorder(),
-              icon: const Icon(Icons.casino_outlined),
-              label: const Text('Was soll ich spielen?'),
-            ),
     );
   }
 
-  /// Compact search + filter bar. The actual filter controls live behind
-  /// the funnel button in a bottom sheet (see [_openFilterSheet]) instead of
-  /// always taking up vertical space above the grid.
-  Widget _buildSearchAndFilterBar(LibraryState library) {
+  Widget _buildHeader(LibraryState library) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 8),
+      child: Row(
         children: [
-          if (library.isPrefetchingDetails)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Lade Zusatzinfos… ${library.prefetchedCount}/${library.games.length}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (value) => setState(() => _query = value),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Spiele durchsuchen…',
-                    isDense: true,
-                  ),
+              Text(
+                'Bibliothek',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontFamily: 'Bricolage Grotesque',
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(width: 8),
-              Badge(
-                isLabelVisible: _activeFilterCount > 0,
-                label: Text('$_activeFilterCount'),
-                child: IconButton(
-                  tooltip: 'Filter & Sortierung',
-                  onPressed: _openFilterSheet,
-                  icon: const Icon(Icons.tune),
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
+              Text(
+                library.isPrefetchingDetails
+                    ? 'Lade Zusatzinfos… ${library.prefetchedCount}/${library.games.length}'
+                    : '${library.games.length} Spiele',
+                style: zerMonoTextStyle.copyWith(
+                  color: zerTextSecondary,
+                  fontSize: 12,
                 ),
               ),
             ],
+          ),
+          const Spacer(),
+          SizedBox(
+            width: 340,
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocus,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search, size: 20),
+                hintText: 'Spiele durchsuchen…',
+                isDense: true,
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        tooltip: 'Suche leeren',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setState(() {
+                          _searchController.clear();
+                          _query = '';
+                        }),
+                      )
+                    : const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: _KeyHint('Ctrl K'),
+                      ),
+                suffixIconConstraints: const BoxConstraints(minHeight: 0),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Aktualisieren (F5)',
+            onPressed: library.isLoading ? null : _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+            style: IconButton.styleFrom(backgroundColor: zerSurfaceHigh),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChipsRow(LibraryState library) {
+    final allSelected = _selectedPlatforms.length == GamePlatform.values.length;
+    final present = {for (final g in library.games) g.platform};
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _PillChip(
+            label: 'Alle',
+            trailing: '${library.games.length}',
+            selected: allSelected,
+            onTap: () => setState(() {
+              _selectedPlatforms
+                ..clear()
+                ..addAll(GamePlatform.values);
+            }),
+          ),
+          for (final platform in GamePlatform.values)
+            if (present.contains(platform))
+              _PillChip(
+                label: platform.label,
+                leading: platform,
+                selected: !allSelected && _selectedPlatforms.contains(platform),
+                onTap: () => _togglePlatformOnly(platform),
+              ),
+          _PillChip(
+            label: 'Backlog',
+            icon: Icons.inventory_2_outlined,
+            selected: _onlyUnplayed,
+            onTap: () => setState(() {
+              _onlyUnplayed = !_onlyUnplayed;
+              if (_onlyUnplayed) _onlyPlayed = false;
+            }),
+          ),
+          const SizedBox(width: 4),
+          PopupMenuButton<_SortMode>(
+            tooltip: 'Sortierung',
+            initialValue: _sortMode,
+            onSelected: (mode) => setState(() => _sortMode = mode),
+            itemBuilder: (_) => [
+              for (final mode in _SortMode.values)
+                PopupMenuItem(value: mode, child: Text(mode.label)),
+            ],
+            child: _PillChip(
+              label: _sortMode.label,
+              icon: Icons.swap_vert,
+              selected: false,
+            ),
+          ),
+          _PillChip(
+            label: _activeFilterCount > 0
+                ? 'Filter · $_activeFilterCount'
+                : 'Filter',
+            icon: Icons.tune,
+            selected: _onlyControllerSupport || _onlyGerman || _onlyPlayed,
+            onTap: _openFilterSheet,
           ),
         ],
       ),
@@ -451,7 +422,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         children: [
                           for (final platform in GamePlatform.values)
                             FilterChip(
-                              avatar: Icon(platform.icon, size: 16),
+                              avatar: PlatformLogo(
+                                platform,
+                                size: 14,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
                               label: Text(platform.label),
                               selected: _selectedPlatforms.contains(platform),
                               onSelected: (selected) => update(() {
@@ -499,7 +474,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             }),
                           ),
                           FilterChip(
-                            avatar: const Icon(Icons.gamepad_outlined, size: 16),
+                            avatar: const Icon(
+                              Icons.gamepad_outlined,
+                              size: 16,
+                            ),
                             label: const Text('Controller-Support'),
                             selected: _onlyControllerSupport,
                             onSelected: (selected) =>
@@ -540,7 +518,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildBody(LibraryState library, List<LibraryGame> filtered) {
+  Widget _buildBody(
+    LibraryState library,
+    List<LibraryGame> filtered,
+    WishlistState wishlist,
+  ) {
     if (library.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -554,138 +536,195 @@ class _LibraryScreenState extends State<LibraryScreen> {
       );
     }
 
-    if (filtered.isEmpty) {
-      return const Center(child: Text('Keine Spiele gefunden.'));
-    }
+    final recent = library.games.where((g) => g.lastPlayed != null).toList()
+      ..sort((a, b) => b.lastPlayed!.compareTo(a.lastPlayed!));
+    final showExtras = !_isFiltering;
+    final alerts = wishlist.alertedEntries;
 
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 240,
-        childAspectRatio: 460 / 215,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: filtered.length,
-      itemBuilder: (context, index) => _GameCard(game: filtered[index]),
+    const hPad = EdgeInsets.symmetric(horizontal: 28);
+
+    return CustomScrollView(
+      slivers: [
+        if (showExtras && recent.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
+            sliver: SliverToBoxAdapter(child: _HeroBanner(game: recent.first)),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(28, 18, 28, 0),
+          sliver: SliverToBoxAdapter(child: _buildChipsRow(library)),
+        ),
+        if (showExtras && recent.length > 1) ...[
+          const SliverPadding(
+            padding: hPad,
+            sliver: SliverToBoxAdapter(child: _SectionTitle('Weiter spielen')),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 246,
+              child: ListView.separated(
+                padding: hPad.copyWith(top: 4, bottom: 8),
+                scrollDirection: Axis.horizontal,
+                itemCount: recent.length.clamp(0, 12) - 1,
+                separatorBuilder: (_, _) => const SizedBox(width: 14),
+                itemBuilder: (context, index) => SizedBox(
+                  width: 156,
+                  child: _GameCard(game: recent[index + 1]),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (showExtras && alerts.isNotEmpty) ...[
+          SliverPadding(
+            padding: hPad,
+            sliver: SliverToBoxAdapter(
+              child: _SectionTitle(
+                'Preisalarme auf deiner Wunschliste',
+                trailing: '${alerts.length}',
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 92,
+              child: ListView.separated(
+                padding: hPad.copyWith(top: 4, bottom: 8),
+                scrollDirection: Axis.horizontal,
+                itemCount: alerts.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (context, index) => _DealTile(
+                  entry: alerts[index],
+                  onTap: () => AppShell.select(context, AppSection.wishlist),
+                ),
+              ),
+            ),
+          ),
+        ],
+        SliverPadding(
+          padding: hPad,
+          sliver: SliverToBoxAdapter(
+            child: _SectionTitle(
+              _isFiltering ? 'Ergebnisse' : 'Alle Spiele',
+              trailing: '${filtered.length}',
+            ),
+          ),
+        ),
+        if (filtered.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(48),
+              child: Center(child: Text('Keine Spiele gefunden.')),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(28, 4, 28, 32),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 180,
+                childAspectRatio: 2 / 3,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 18,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _GameCard(game: filtered[index]),
+                childCount: filtered.length,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
 
-class _GameCard extends StatelessWidget {
-  const _GameCard({required this.game});
+String _relativeDay(DateTime date) {
+  final today = DateUtils.dateOnly(DateTime.now());
+  final days = today.difference(DateUtils.dateOnly(date)).inDays;
+  if (days <= 0) return 'heute';
+  if (days == 1) return 'gestern';
+  if (days < 30) return 'vor $days Tagen';
+  return 'am ${date.day}.${date.month}.${date.year}';
+}
 
-  final LibraryGame game;
+class _KeyHint extends StatelessWidget {
+  const _KeyHint(this.text);
 
-  Future<void> _launchPrimaryAction(BuildContext context) async {
-    if (game is EpicGame) {
-      await launchEpicGame(context, game as EpicGame);
-      return;
-    }
-
-    final launched = await launchUrl(Uri.parse(game.primaryActionUrl));
-    if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${game.primaryActionLabel} fehlgeschlagen.')),
-      );
-    }
-  }
-
-  static final _radius = BorderRadius.circular(16);
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return HoverLift(
-      borderRadius: _radius,
-      child: InkWell(
-        borderRadius: _radius,
-        onTap: () => pushGameDetails(context, game),
-        child: ClipRRect(
-          borderRadius: _radius,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (game.headerImageUrl.isEmpty)
-                _NoCoverPlaceholder(game: game)
-              else
-                CachedNetworkImage(
-                  imageUrl: game.headerImageUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: (context, url, error) =>
-                      _NoCoverPlaceholder(game: game),
-                  placeholder: (context, url) => Container(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest,
-                  ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: zerDivider),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: zerMonoTextStyle.copyWith(fontSize: 11, color: zerTextSecondary),
+      ),
+    );
+  }
+}
+
+class _PillChip extends StatelessWidget {
+  const _PillChip({
+    required this.label,
+    required this.selected,
+    this.onTap,
+    this.leading,
+    this.icon,
+    this.trailing,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+  final GamePlatform? leading;
+  final IconData? icon;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected ? zerBackground : zerTextPrimary;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: selected ? zerTextPrimary : zerSurfaceHigh,
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (leading != null) ...[
+                  PlatformLogo(leading!, size: 14, color: fg),
+                  const SizedBox(width: 7),
+                ],
+                if (icon != null) ...[
+                  Icon(icon, size: 16, color: fg),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  label,
+                  style: TextStyle(color: fg, fontWeight: FontWeight.w600),
                 ),
-              Positioned(
-                left: 8,
-                top: 8,
-                child: _PlatformBadge(platform: game.platform),
-              ),
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Material(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    tooltip: game.primaryActionLabel,
-                    icon: Icon(
-                      game.platform == GamePlatform.itchio
-                          ? Icons.open_in_new
-                          : Icons.play_arrow,
-                      color: Colors.white,
+                if (trailing != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    trailing!,
+                    style: zerMonoTextStyle.copyWith(
+                      color: fg.withValues(alpha: 0.6),
+                      fontSize: 12,
                     ),
-                    onPressed: () => _launchPrimaryAction(context),
                   ),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 20, 10, 8),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.88),
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        game.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'Bricolage Grotesque',
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                      if (game.hasPlaytimeData)
-                        Text(
-                          '${game.playtimeForeverHours.toStringAsFixed(1)} h gespielt',
-                          style: zerMonoTextStyle.copyWith(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -693,8 +732,447 @@ class _GameCard extends StatelessWidget {
   }
 }
 
-/// Shown instead of the cover image for platforms whose API doesn't expose
-/// artwork (currently Epic) — a branded gradient beats a broken-image icon.
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title, {this.trailing});
+
+  final String title;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 26, bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Bricolage Grotesque',
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              trailing!,
+              style: zerMonoTextStyle.copyWith(
+                color: zerTextSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Big "continue where you left off" banner for the most recently played
+/// game — wide key art, dimmed towards the text side.
+class _HeroBanner extends StatelessWidget {
+  const _HeroBanner({required this.game});
+
+  final LibraryGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = this.game;
+    final heroUrl = game is SteamGame
+        ? game.libraryHeroUrl
+        : game.headerImageUrl;
+    final radius = BorderRadius.circular(20);
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: SizedBox(
+        height: 280,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (heroUrl.isEmpty)
+              _NoCoverPlaceholder(game: game)
+            else
+              CachedNetworkImage(
+                imageUrl: heroUrl,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                errorWidget: (_, _, _) => game.headerImageUrl.isEmpty
+                    ? _NoCoverPlaceholder(game: game)
+                    : CachedNetworkImage(
+                        imageUrl: game.headerImageUrl,
+                        fit: BoxFit.cover,
+                      ),
+                placeholder: (_, _) => Container(color: zerSurfaceHigh),
+              ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.88),
+                    Colors.black.withValues(alpha: 0.35),
+                    Colors.transparent,
+                  ],
+                  stops: const [0, 0.55, 1],
+                ),
+              ),
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: zerCardBorder),
+              ),
+            ),
+            Positioned(
+              left: 32,
+              bottom: 28,
+              right: 32,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _PlatformBadge(platform: game.platform),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Zuletzt gespielt ${_relativeDay(game.lastPlayed!)}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    game.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Bricolage Grotesque',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 34,
+                      height: 1.1,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => launchLibraryGame(context, game),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: zerAccent,
+                          foregroundColor: zerOnAccent,
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 22,
+                            vertical: 16,
+                          ),
+                        ),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: const Text(
+                          'Spielen',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton(
+                        onPressed: () => pushGameDetails(context, game),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white30),
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                        ),
+                        child: const Text('Details'),
+                      ),
+                      const SizedBox(width: 18),
+                      if (game.hasPlaytimeData && game.hasBeenPlayed)
+                        Text(
+                          '${game.playtimeForeverHours.toStringAsFixed(1)} h gespielt',
+                          style: zerMonoTextStyle.copyWith(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DealTile extends StatelessWidget {
+  const _DealTile({required this.entry, required this.onTap});
+
+  final WishlistEntry entry;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(14);
+    final appId = entry.steamAppId;
+    return SizedBox(
+      width: 240,
+      child: HoverLift(
+        borderRadius: radius,
+        child: Material(
+          color: zerSurfaceHigh,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (appId != null)
+                  CachedNetworkImage(
+                    imageUrl:
+                        'https://cdn.akamai.steamstatic.com/steam/apps/$appId/header.jpg',
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.85),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 8,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.local_offer_rounded,
+                        size: 14,
+                        color: Color(0xFF7EE2A8),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Portrait library card: box art, store badge, name, and a play button
+/// that fades in on hover.
+class _GameCard extends StatefulWidget {
+  const _GameCard({required this.game});
+
+  final LibraryGame game;
+
+  @override
+  State<_GameCard> createState() => _GameCardState();
+}
+
+class _GameCardState extends State<_GameCard> {
+  bool _hovering = false;
+
+  static final _radius = BorderRadius.circular(14);
+
+  @override
+  Widget build(BuildContext context) {
+    final game = widget.game;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: HoverLift(
+        borderRadius: _radius,
+        child: Material(
+          color: zerSurfaceHigh,
+          borderRadius: _radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => pushGameDetails(context, game),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _CoverImage(game: game),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(10, 28, 10, 9),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.9),
+                        ],
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          game.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Bricolage Grotesque',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            height: 1.15,
+                          ),
+                        ),
+                        if (game.hasPlaytimeData && game.hasBeenPlayed)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '${game.playtimeForeverHours.toStringAsFixed(1)} h',
+                              style: zerMonoTextStyle.copyWith(
+                                color: Colors.white60,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  child: _PlatformBadge(platform: game.platform, compact: true),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: AnimatedOpacity(
+                    opacity: _hovering ? 1 : 0,
+                    duration: const Duration(milliseconds: 150),
+                    child: IgnorePointer(
+                      ignoring: !_hovering,
+                      child: Material(
+                        color: zerAccent,
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          tooltip: game.primaryActionLabel,
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            game.platform == GamePlatform.itchio
+                                ? Icons.open_in_new
+                                : Icons.play_arrow_rounded,
+                            color: zerOnAccent,
+                          ),
+                          onPressed: () => launchLibraryGame(context, game),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Portrait art when the store has it; otherwise the landscape header is
+/// shown centred over a blurred, stretched copy of itself so every card
+/// keeps the same 2:3 shape.
+class _CoverImage extends StatelessWidget {
+  const _CoverImage({required this.game});
+
+  final LibraryGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget placeholder() => Container(color: zerSurfaceHigh);
+
+    if (game.coverIsPortrait) {
+      return CachedNetworkImage(
+        imageUrl: game.coverImageUrl,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => placeholder(),
+        errorWidget: (_, _, _) => _LandscapeCover(game: game),
+      );
+    }
+    return _LandscapeCover(game: game);
+  }
+}
+
+class _LandscapeCover extends StatelessWidget {
+  const _LandscapeCover({required this.game});
+
+  final LibraryGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = game.headerImageUrl;
+    if (url.isEmpty) return _NoCoverPlaceholder(game: game);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            errorWidget: (_, _, _) => _NoCoverPlaceholder(game: game),
+          ),
+        ),
+        Container(color: Colors.black26),
+        Align(
+          alignment: const Alignment(0, -0.35),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.fitWidth,
+            errorWidget: (_, _, _) => const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shown instead of the cover image when a store exposes no artwork — a
+/// branded gradient with the store logo beats a broken-image icon.
 class _NoCoverPlaceholder extends StatelessWidget {
   const _NoCoverPlaceholder({required this.game});
 
@@ -715,41 +1193,47 @@ class _NoCoverPlaceholder extends StatelessWidget {
       ),
       alignment: Alignment.center,
       padding: const EdgeInsets.all(16),
-      child: Icon(game.platform.icon, size: 40, color: Colors.white24),
+      child: PlatformLogo(game.platform, size: 44, color: Colors.white24),
     );
   }
 }
 
 class _PlatformBadge extends StatelessWidget {
-  const _PlatformBadge({required this.platform});
+  const _PlatformBadge({required this.platform, this.compact = false});
 
   final GamePlatform platform;
 
+  /// Logo only — used on the small grid cards.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: platform.color.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 4),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(platform.icon, size: 12, color: Colors.white),
-          const SizedBox(width: 4),
-          Text(
-            platform.label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+    return Tooltip(
+      message: platform.label,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PlatformLogo(platform, size: 13),
+            if (!compact) ...[
+              const SizedBox(width: 6),
+              Text(
+                platform.label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -103,14 +103,14 @@ class _WishlistScreenState extends State<WishlistScreen> {
         children: [
           if (wishlist.isConnected)
             const Padding(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(28, 8, 28, 16),
               child: _AddGameField(),
             )
           else
             _NoItadHint(),
           if (wishlist.isLoading && wishlist.steamImportTotal > 0)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
                 children: [
                   LinearProgressIndicator(
@@ -169,7 +169,7 @@ class _OnSaleSummary extends StatelessWidget {
 
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.fromLTRB(28, 4, 28, 8),
       child: Material(
         color: active ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(10),
@@ -220,7 +220,7 @@ class _NoItadHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(28, 16, 28, 8),
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -466,7 +466,7 @@ class _WishlistList extends StatelessWidget {
     final alerted = wishlist.alertedEntries.map((e) => e.itadGameId).toSet();
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       itemCount: visible.length,
       itemBuilder: (context, index) {
         final entry = visible[index];

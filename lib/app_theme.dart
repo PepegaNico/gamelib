@@ -60,10 +60,14 @@ ThemeData buildAppTheme() {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
+      // Page headers match the library's big "Bibliothek" title.
+      toolbarHeight: 76,
+      titleSpacing: 28,
       titleTextStyle: TextStyle(
         fontFamily: _fontDisplay,
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.3,
         color: zerTextPrimary,
       ),
     ),

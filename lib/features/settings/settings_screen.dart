@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/models/game_platform.dart';
 import '../auth/auth_state.dart';
 import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
+import '../library/library_state.dart';
 import '../sync/qr_export_screen.dart';
 import '../sync/qr_import_screen.dart';
 import '../sync/sync_state.dart';
 import '../wishlist/wishlist_state.dart';
+import '../xbox/xbox_state.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -167,6 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       itchio: context.read<ItchioState>(),
       wishlist: context.read<WishlistState>(),
       epic: context.read<EpicState>(),
+      xbox: context.read<XboxState>(),
     );
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -190,6 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final epic = context.watch<EpicState>();
     final wishlist = context.watch<WishlistState>();
     final sync = context.watch<SyncState>();
+    final xbox = context.watch<XboxState>();
     final needsSteamSetup = auth.status == AuthStatus.needsApiKey;
 
     return Scaffold(
@@ -207,6 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 else
                   _SettingsSection(
                     icon: Icons.videogame_asset,
+                    platform: GamePlatform.steam,
                     title: 'Steam',
                     status: _statusChip('${auth.accounts.length} Konto(en)'),
                     children: _buildSteamSectionChildren(auth),
@@ -214,6 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 _SettingsSection(
                   icon: Icons.grid_view_rounded,
+                  platform: GamePlatform.itchio,
                   title: 'itch.io',
                   status: itchio.isConnected
                       ? _statusChip('${itchio.accounts.length} Konto(en)')
@@ -223,9 +230,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 _SettingsSection(
                   icon: Icons.games_outlined,
+                  platform: GamePlatform.epic,
                   title: 'Epic Games',
                   status: _epicStatusChip(epic, sync),
                   children: _buildEpicSectionChildren(epic, sync),
+                ),
+                const SizedBox(height: 12),
+                _SettingsSection(
+                  icon: Icons.sports_esports,
+                  platform: GamePlatform.xbox,
+                  title: 'Xbox / Microsoft Store',
+                  status: xbox.games.isNotEmpty
+                      ? _statusChip('${xbox.games.length} Spiele')
+                      : null,
+                  children: _buildXboxSectionChildren(xbox, sync),
                 ),
                 const SizedBox(height: 12),
                 _SettingsSection(
@@ -603,6 +621,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
   }
 
+  List<Widget> _buildXboxSectionChildren(XboxState xbox, SyncState sync) {
+    final syncedCount = sync.syncedXboxGames.length;
+    return [
+      Text(
+        Platform.isWindows
+            ? 'Die App findet automatisch alle PC-Spiele, die über die Xbox-App '
+                  'oder den Microsoft Store installiert sind (rein lokal, kein '
+                  'Login nötig). Cover und Beschreibung kommen aus dem '
+                  'öffentlichen Microsoft-Store-Katalog.'
+            : syncedCount > 0
+            ? '$syncedCount Spiele wurden von deinem Windows-PC über '
+                  'Cloud-Sync übertragen (nur ansehen — starten geht nur auf '
+                  'dem PC).'
+            : 'Xbox-/Microsoft-Store-Spiele werden auf deinem Windows-PC '
+                  'erkannt und erscheinen hier, sobald du dort bei Cloud-Sync '
+                  'angemeldet bist.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      if (Platform.isWindows) ...[
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                xbox.isLoading
+                    ? 'Suche installierte Spiele…'
+                    : xbox.hasScanned
+                    ? '${xbox.games.length} Spiele gefunden'
+                    : 'Noch nicht gesucht',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: xbox.isLoading
+                  ? null
+                  : () async {
+                      final library = context.read<LibraryState>();
+                      await xbox.refresh();
+                      library.setXboxGames(xbox.games);
+                    },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Erneut suchen'),
+            ),
+          ],
+        ),
+      ],
+    ];
+  }
+
   List<Widget> _buildEpicSectionChildren(EpicState epic, SyncState sync) {
     final syncedCount = sync.syncedEpicGames.length;
 
@@ -761,6 +828,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({
     required this.icon,
+    this.platform,
     required this.title,
     required this.children,
     this.status,
@@ -768,6 +836,9 @@ class _SettingsSection extends StatelessWidget {
   });
 
   final IconData icon;
+
+  /// When set, the store's brand logo replaces [icon].
+  final GamePlatform? platform;
   final String title;
   final Widget? status;
   final bool initiallyExpanded;
@@ -782,7 +853,13 @@ class _SettingsSection extends StatelessWidget {
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           initiallyExpanded: initiallyExpanded,
-          leading: Icon(icon),
+          leading: platform != null
+              ? PlatformLogo(
+                  platform!,
+                  size: 22,
+                  color: Theme.of(context).colorScheme.onSurface,
+                )
+              : Icon(icon),
           title: Text(title),
           trailing: status == null
               ? const Icon(Icons.expand_more)

@@ -53,6 +53,12 @@ class ItchioGame implements LibraryGame {
   String get headerImageUrl => coverUrl;
 
   @override
+  String get coverImageUrl => coverUrl;
+
+  @override
+  bool get coverIsPortrait => false;
+
+  @override
   String get storePageUrl => pageUrl;
 
   @override

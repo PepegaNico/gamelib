@@ -24,7 +24,10 @@ class SteamGame implements LibraryGame {
     required this.steamId,
   });
 
-  factory SteamGame.fromJson(Map<String, dynamic> json, {required String steamId}) {
+  factory SteamGame.fromJson(
+    Map<String, dynamic> json, {
+    required String steamId,
+  }) {
     final lastPlayedEpoch = json['rtime_last_played'] as int?;
     return SteamGame(
       appId: json['appid'] as int,
@@ -53,6 +56,16 @@ class SteamGame implements LibraryGame {
 
   String get libraryCapsuleUrl =>
       'https://cdn.akamai.steamstatic.com/steam/apps/$appId/library_600x900.jpg';
+
+  /// Wide key art behind the library hero banner.
+  String get libraryHeroUrl =>
+      'https://cdn.akamai.steamstatic.com/steam/apps/$appId/library_hero.jpg';
+
+  @override
+  String get coverImageUrl => libraryCapsuleUrl;
+
+  @override
+  bool get coverIsPortrait => true;
 
   @override
   String get storePageUrl => 'https://store.steampowered.com/app/$appId/';

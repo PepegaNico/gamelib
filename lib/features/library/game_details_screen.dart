@@ -11,6 +11,7 @@ import '../../core/steam/steam_app_details.dart';
 import '../../core/steam/steam_game.dart';
 import '../../core/steam/steam_store_api_service.dart';
 import '../../core/steam/steam_web_api_service.dart';
+import '../../core/widgets/game_details_hero.dart';
 import '../auth/auth_state.dart';
 import '../wishlist/wishlist_state.dart';
 import 'achievements_section.dart';
@@ -126,113 +127,81 @@ class _GameDetailsScreenState extends State<GameDetailsScreen> {
     final game = widget.game;
 
     return Scaffold(
-      appBar: AppBar(title: Text(game.name)),
       body: SingleChildScrollView(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AspectRatio(
-                  aspectRatio: 460 / 215,
-                  child: CachedNetworkImage(
-                    imageUrl: game.headerImageUrl,
-                    fit: BoxFit.cover,
-                    errorWidget: (context, url, error) => Container(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest,
-                    ),
-                  ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GameDetailsHero(
+              imageUrl: game.libraryHeroUrl,
+              fallbackImageUrl: game.headerImageUrl,
+              platform: game.platform,
+              title: game.name,
+              stats: [
+                (
+                  Icons.schedule,
+                  '${game.playtimeForeverHours.toStringAsFixed(1)} h gespielt',
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        game.name,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 8,
-                        children: [
-                          _StatChip(
-                            icon: Icons.schedule,
-                            label:
-                                '${game.playtimeForeverHours.toStringAsFixed(1)} h gesamt',
-                          ),
-                          if (game.lastPlayed != null)
-                            _StatChip(
-                              icon: Icons.event,
-                              label:
-                                  'Zuletzt gespielt: ${_formatDate(game.lastPlayed!)}',
-                            ),
-                          if (!_loading && _details?.metacriticScore != null)
-                            _StatChip(
-                              icon: Icons.star,
-                              label: 'Metacritic ${_details!.metacriticScore}',
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          FilledButton.icon(
-                            onPressed: _launchGame,
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('Spiel starten'),
-                          ),
-                          const SizedBox(width: 12),
-                          OutlinedButton.icon(
-                            onPressed: _openStorePage,
-                            icon: const Icon(Icons.open_in_new),
-                            label: const Text('Store-Seite öffnen'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      if (_loading)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (_details == null)
-                        Text(
-                          'Für dieses Spiel sind keine zusätzlichen Store-Informationen verfügbar.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        )
-                      else
-                        _DetailsBody(details: _details!),
-                      const SizedBox(height: 8),
-                      if (_loadingAchievements)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (_achievements != null &&
-                          _achievements!.isNotEmpty)
-                        AchievementsSection(achievements: _achievements!),
-                      if (_loadingPrice || _priceInfo != null) ...[
-                        const SizedBox(height: 16),
-                        _PriceSection(
-                          priceInfo: _priceInfo,
-                          isLoading: _loadingPrice,
-                        ),
-                      ],
-                    ],
+                if (game.lastPlayed != null)
+                  (Icons.event, 'Zuletzt ${_formatDate(game.lastPlayed!)}'),
+                if (!_loading && _details?.metacriticScore != null)
+                  (
+                    Icons.star_rounded,
+                    'Metacritic ${_details!.metacriticScore}',
                   ),
+              ],
+              actions: [
+                FilledButton.icon(
+                  onPressed: _launchGame,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Spielen'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _openStorePage,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white30),
+                  ),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Store-Seite'),
                 ),
               ],
             ),
-          ),
+            GameDetailsBody(
+              children: [
+                if (_loading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_details == null)
+                  Text(
+                    'Für dieses Spiel sind keine zusätzlichen Store-Informationen verfügbar.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  )
+                else
+                  _DetailsBody(details: _details!),
+                const SizedBox(height: 8),
+                if (_loadingAchievements)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_achievements != null && _achievements!.isNotEmpty)
+                  AchievementsSection(achievements: _achievements!),
+                if (_loadingPrice || _priceInfo != null) ...[
+                  const SizedBox(height: 16),
+                  _PriceSection(
+                    priceInfo: _priceInfo,
+                    isLoading: _loadingPrice,
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -394,17 +363,5 @@ class _PriceSection extends StatelessWidget {
         ],
       ],
     );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(avatar: Icon(icon, size: 16), label: Text(label));
   }
 }

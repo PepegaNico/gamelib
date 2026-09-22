@@ -9,6 +9,12 @@ abstract class LibraryGame {
   String get name;
   GamePlatform get platform;
   String get headerImageUrl;
+
+  /// Portrait (2:3) box art for the library grid. Falls back to the
+  /// landscape [headerImageUrl] when a store has no tall artwork — check
+  /// [coverIsPortrait] to know which one you got.
+  String get coverImageUrl;
+  bool get coverIsPortrait;
   String get storePageUrl;
 
   /// False for stores (like itch.io) that don't expose playtime via their
