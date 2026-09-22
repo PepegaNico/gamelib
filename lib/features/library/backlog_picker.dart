@@ -128,7 +128,17 @@ class _BacklogPickerDialogState extends State<_BacklogPickerDialog>
     return AlertDialog(
       backgroundColor: zerSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Was soll ich heute spielen?'),
+      titlePadding: const EdgeInsets.fromLTRB(24, 16, 12, 0),
+      title: Row(
+        children: [
+          const Expanded(child: Text('Was soll ich heute spielen?')),
+          IconButton(
+            tooltip: 'Schliessen',
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: _reelViewportWidth,
         child: Column(
