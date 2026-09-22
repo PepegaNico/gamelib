@@ -12,14 +12,26 @@ class QrCredentialsPayload {
   final List<String> itchioApiKeys;
   final String? itadApiKey;
 
+  /// A Firebase Cloud-Sync refresh token — lets the scanning device pair
+  /// into the same Cloud-Sync account (and from there pull e.g. the Epic
+  /// library snapshot) without re-typing an email/password. A refresh
+  /// token rather than the password itself, so a leaked/screenshotted QR
+  /// only exposes a revocable session, not the account credential. Only
+  /// set when the exporting device is actually logged into Cloud-Sync.
+  final String? syncRefreshToken;
+
   const QrCredentialsPayload({
     required this.steamAccounts,
     required this.itchioApiKeys,
     required this.itadApiKey,
+    this.syncRefreshToken,
   });
 
   bool get isEmpty =>
-      steamAccounts.isEmpty && itchioApiKeys.isEmpty && itadApiKey == null;
+      steamAccounts.isEmpty &&
+      itchioApiKeys.isEmpty &&
+      itadApiKey == null &&
+      syncRefreshToken == null;
 
   String encode() {
     final map = <String, dynamic>{
@@ -29,6 +41,7 @@ class QrCredentialsPayload {
       ],
       'itchio': itchioApiKeys,
       if (itadApiKey != null) 'itad': itadApiKey,
+      if (syncRefreshToken != null) 'syncToken': syncRefreshToken,
     };
     return jsonEncode(map);
   }
@@ -50,11 +63,13 @@ class QrCredentialsPayload {
     ];
     final itchio = (decoded['itchio'] as List? ?? []).cast<String>();
     final itad = decoded['itad'] as String?;
+    final syncToken = decoded['syncToken'] as String?;
 
     return QrCredentialsPayload(
       steamAccounts: steam,
       itchioApiKeys: itchio,
       itadApiKey: itad,
+      syncRefreshToken: syncToken,
     );
   }
 }

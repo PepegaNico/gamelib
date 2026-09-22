@@ -4,6 +4,7 @@ import '../../core/itad/itad_api_service.dart';
 import '../../core/itad/itad_credentials_store.dart';
 import '../../core/itad/itad_default_key.dart';
 import '../../core/itad/itad_models.dart';
+import '../../core/locale/region.dart';
 import '../../core/steam/steam_account.dart';
 import '../../core/steam/steam_store_api_service.dart';
 import '../../core/steam/steam_wishlist_api_service.dart';
@@ -139,6 +140,23 @@ class WishlistState extends ChangeNotifier {
 
   Future<void> remove(String itadGameId) async {
     entries = entries.where((e) => e.itadGameId != itadGameId).toList();
+    entriesUpdatedAt = await _store.saveAll(entries);
+    notifyListeners();
+  }
+
+  /// Drops wishlist entries for games the user now owns on Steam — a
+  /// wishlist entry that's already been bought has no further reason to
+  /// be tracked. Only Steam-imported entries (they carry a steamAppId) can
+  /// be matched this way; manually-added ITAD entries are left alone.
+  Future<void> removeOwned(Set<int> ownedSteamAppIds) async {
+    if (ownedSteamAppIds.isEmpty || entries.isEmpty) return;
+    final remaining = entries
+        .where(
+          (e) => e.steamAppId == null || !ownedSteamAppIds.contains(e.steamAppId),
+        )
+        .toList();
+    if (remaining.length == entries.length) return;
+    entries = remaining;
     entriesUpdatedAt = await _store.saveAll(entries);
     notifyListeners();
   }
@@ -393,7 +411,11 @@ class WishlistState extends ChangeNotifier {
       // with whatever it did manage to fetch, and overwriting the whole
       // cache with that made already-loaded prices vanish again on the
       // very next refresh for no real reason.
-      final fetched = await _apiService.getPrices(effectiveApiKey!, realIds);
+      final fetched = await _apiService.getPrices(
+        effectiveApiKey!,
+        realIds,
+        country: RegionDetector.detect(),
+      );
       priceCache = {...priceCache, ...fetched};
     } catch (e) {
       errorMessage = 'Preise konnten nicht geladen werden: $e';

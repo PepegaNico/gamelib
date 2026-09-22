@@ -9,8 +9,28 @@ import '../auth/auth_state.dart';
 import '../settings/settings_screen.dart';
 import 'wishlist_state.dart';
 
-class WishlistScreen extends StatelessWidget {
+enum _SortMode {
+  standard('Hinzugefügt', Icons.sort),
+  discountDesc('Höchster Rabatt', Icons.local_offer_outlined),
+  priceAsc('Günstigster Preis', Icons.trending_down),
+  targetReached('Zielpreis erreicht', Icons.notifications_active_outlined);
+
+  const _SortMode(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
+class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
+
+  @override
+  State<WishlistScreen> createState() => _WishlistScreenState();
+}
+
+class _WishlistScreenState extends State<WishlistScreen> {
+  _SortMode _sortMode = _SortMode.standard;
+  bool _onlyOnSale = false;
 
   Future<void> _importFromSteam(BuildContext context) async {
     final auth = context.read<AuthState>();
@@ -39,6 +59,29 @@ class WishlistScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Wishlist & Preisalarm'),
         actions: [
+          PopupMenuButton<_SortMode>(
+            tooltip: 'Sortieren',
+            icon: const Icon(Icons.sort),
+            initialValue: _sortMode,
+            onSelected: (mode) => setState(() => _sortMode = mode),
+            itemBuilder: (context) => [
+              for (final mode in _SortMode.values)
+                PopupMenuItem(
+                  value: mode,
+                  child: Row(
+                    children: [
+                      Icon(mode.icon, size: 18),
+                      const SizedBox(width: 10),
+                      Text(mode.label),
+                      if (mode == _sortMode) ...[
+                        const Spacer(),
+                        const Icon(Icons.check, size: 18),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             tooltip: 'Steam-Wishlist importieren',
             onPressed: wishlist.isLoading
@@ -83,8 +126,87 @@ class WishlistScreen extends StatelessWidget {
                 ],
               ),
             ),
-          Expanded(child: _WishlistList(wishlist: wishlist)),
+          _OnSaleSummary(
+            wishlist: wishlist,
+            active: _onlyOnSale,
+            onTap: () => setState(() => _onlyOnSale = !_onlyOnSale),
+          ),
+          Expanded(
+            child: _WishlistList(
+              wishlist: wishlist,
+              sortMode: _sortMode,
+              onlyOnSale: _onlyOnSale,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Collapsed at-a-glance count of wishlist games currently on sale —
+/// otherwise you'd have to open every card to find out. Doubles as the
+/// toggle for the "nur im Angebot" filter so acting on it is one tap.
+class _OnSaleSummary extends StatelessWidget {
+  const _OnSaleSummary({
+    required this.wishlist,
+    required this.active,
+    required this.onTap,
+  });
+
+  final WishlistState wishlist;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSaleCount = wishlist.entries.where((e) {
+      final best = wishlist.priceCache[e.itadGameId]?.bestDeal;
+      return best != null && best.cutPercent > 0;
+    }).length;
+
+    if (onSaleCount == 0 && !active) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Material(
+        color: active ? colorScheme.primaryContainer : colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onSaleCount == 0 && !active ? null : onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.local_offer,
+                  size: 18,
+                  color: active ? colorScheme.onPrimaryContainer : colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    onSaleCount == 0
+                        ? 'Aktuell keine Wishlist-Spiele im Angebot'
+                        : '$onSaleCount Spiel${onSaleCount == 1 ? '' : 'e'} deiner Wishlist '
+                              'gerade im Angebot',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: active ? colorScheme.onPrimaryContainer : null,
+                    ),
+                  ),
+                ),
+                if (active)
+                  Icon(
+                    Icons.filter_alt,
+                    size: 18,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -220,9 +342,61 @@ class _AddGameFieldState extends State<_AddGameField> {
 }
 
 class _WishlistList extends StatelessWidget {
-  const _WishlistList({required this.wishlist});
+  const _WishlistList({
+    required this.wishlist,
+    required this.sortMode,
+    required this.onlyOnSale,
+  });
 
   final WishlistState wishlist;
+  final _SortMode sortMode;
+  final bool onlyOnSale;
+
+  List<WishlistEntry> _visibleEntries() {
+    var list = wishlist.entries;
+    if (onlyOnSale) {
+      list = list.where((e) {
+        final best = wishlist.priceCache[e.itadGameId]?.bestDeal;
+        return best != null && best.cutPercent > 0;
+      }).toList();
+    }
+
+    switch (sortMode) {
+      case _SortMode.standard:
+        return list;
+      case _SortMode.discountDesc:
+        list = [...list]
+          ..sort((a, b) {
+            final cutA = wishlist.priceCache[a.itadGameId]?.bestDeal?.cutPercent ?? -1;
+            final cutB = wishlist.priceCache[b.itadGameId]?.bestDeal?.cutPercent ?? -1;
+            return cutB.compareTo(cutA);
+          });
+        return list;
+      case _SortMode.priceAsc:
+        list = [...list]
+          ..sort((a, b) {
+            final priceA =
+                wishlist.priceCache[a.itadGameId]?.bestDeal?.price.amount ??
+                double.infinity;
+            final priceB =
+                wishlist.priceCache[b.itadGameId]?.bestDeal?.price.amount ??
+                double.infinity;
+            return priceA.compareTo(priceB);
+          });
+        return list;
+      case _SortMode.targetReached:
+        final alerted = wishlist.alertedEntries
+            .map((e) => e.itadGameId)
+            .toSet();
+        list = [...list]
+          ..sort((a, b) {
+            final aAlerted = alerted.contains(a.itadGameId) ? 0 : 1;
+            final bAlerted = alerted.contains(b.itadGameId) ? 0 : 1;
+            return aAlerted.compareTo(bAlerted);
+          });
+        return list;
+    }
+  }
 
   Future<void> _editTargetPrice(
     BuildContext context,
@@ -282,13 +456,20 @@ class _WishlistList extends StatelessWidget {
       return const Center(child: Text('Deine Wishlist ist leer.'));
     }
 
+    final visible = _visibleEntries();
+    if (visible.isEmpty) {
+      return const Center(
+        child: Text('Keine Wishlist-Spiele passen zum aktuellen Filter.'),
+      );
+    }
+
     final alerted = wishlist.alertedEntries.map((e) => e.itadGameId).toSet();
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: wishlist.entries.length,
+      itemCount: visible.length,
       itemBuilder: (context, index) {
-        final entry = wishlist.entries[index];
+        final entry = visible[index];
         final price = wishlist.priceCache[entry.itadGameId];
         final isAlerted = alerted.contains(entry.itadGameId);
 

@@ -114,6 +114,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     unawaited(context.read<UpdatesState>().checkForUpdates(library.steamGames));
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
+    unawaited(
+      wishlist.removeOwned(library.steamGames.map((g) => g.appId).toSet()),
+    );
     // Import first, then refresh prices — importing can upgrade Steam-only
     // placeholder entries to real ITAD ids, which refreshPrices needs to see
     // to fetch their prices. Running them concurrently raced the two.

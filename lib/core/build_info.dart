@@ -3,5 +3,6 @@
 /// actually picked up the latest change instead of silently running stale
 /// code.
 class BuildInfo {
-  static const label = 'Fix: Preise verschwinden nicht mehr nach kurzem Aufblitzen';
+  static const label =
+      'Neu: Wishlist-Sortierung, Angebots-Übersicht, automatische Bereinigung';
 }
