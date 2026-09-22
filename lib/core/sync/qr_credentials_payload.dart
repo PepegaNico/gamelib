@@ -50,7 +50,7 @@ class QrCredentialsPayload {
     final decoded = jsonDecode(raw);
     if (decoded is! Map<String, dynamic> || decoded['v'] != 1) {
       throw const FormatException(
-        'Das ist kein gültiger GameLib-Sync-QR-Code.',
+        'Das ist kein gültiger GameZer-Sync-QR-Code.',
       );
     }
 

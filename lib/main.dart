@@ -79,7 +79,7 @@ class GameLibApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SyncState()..restore()),
       ],
       child: MaterialApp(
-        title: 'GameLib',
+        title: 'GameZer',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         home: const _RootScreen(),

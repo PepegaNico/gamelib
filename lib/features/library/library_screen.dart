@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../app_theme.dart';
 import '../../core/epic/epic_game.dart';
 import '../../core/models/game_platform.dart';
 import '../../core/models/library_game.dart';
@@ -209,23 +210,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
           icon: Icon(menuExpanded ? Icons.menu_open : Icons.menu),
           onPressed: () => setState(() => _menuExpanded = !menuExpanded),
         ),
-        title: Row(
-          children: [
-            if (auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty) ...[
-              CircleAvatar(
-                backgroundImage: NetworkImage(auth.avatarUrl!),
-                radius: 14,
-              ),
-              const SizedBox(width: 10),
-            ],
-            Text(auth.personaName ?? 'Meine Bibliothek'),
-          ],
-        ),
+        title: const Text('GameZer'),
         actions: [
+          if (auth.avatarUrl != null && auth.avatarUrl!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Tooltip(
+                message: auth.personaName ?? 'Konto',
+                child: CircleAvatar(
+                  backgroundImage: NetworkImage(auth.avatarUrl!),
+                  radius: 14,
+                ),
+              ),
+            ),
           IconButton(
             tooltip: 'Aktualisieren',
             onPressed: library.isLoading ? null : _refresh,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_outlined),
           ),
           IconButton(
             tooltip: 'Einstellungen',
@@ -237,7 +238,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           IconButton(
             tooltip: 'Abmelden',
             onPressed: () => context.read<AuthState>().signOut(),
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_outlined),
           ),
           const SizedBox(width: 8),
         ],
@@ -263,12 +264,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
             destinations: [
               const NavigationRailDestination(
                 icon: Icon(Icons.videogame_asset_outlined),
-                selectedIcon: Icon(Icons.videogame_asset),
+                selectedIcon: Icon(Icons.videogame_asset_outlined),
                 label: Text('Bibliothek'),
               ),
               const NavigationRailDestination(
                 icon: Icon(Icons.storefront_outlined),
-                selectedIcon: Icon(Icons.storefront),
+                selectedIcon: Icon(Icons.storefront_outlined),
                 label: Text('Store'),
               ),
               NavigationRailDestination(
@@ -278,7 +279,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   backgroundColor: Colors.orange,
                   child: const Icon(Icons.favorite_border),
                 ),
-                selectedIcon: const Icon(Icons.favorite),
+                selectedIcon: const Icon(Icons.favorite_border),
                 label: const Text('Wishlist'),
               ),
               NavigationRailDestination(
@@ -287,7 +288,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   label: Text('$updatesUnread'),
                   child: const Icon(Icons.notifications_outlined),
                 ),
-                selectedIcon: const Icon(Icons.notifications),
+                selectedIcon: const Icon(Icons.notifications_outlined),
                 label: const Text('Updates'),
               ),
             ],
@@ -322,6 +323,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ? null
           : FloatingActionButton.extended(
               onPressed: () => showBacklogPicker(context, library.games),
+              backgroundColor: zerAccent,
+              foregroundColor: zerOnAccent,
+              shape: const StadiumBorder(),
               icon: const Icon(Icons.casino_outlined),
               label: const Text('Was soll ich spielen?'),
             ),
@@ -587,7 +591,7 @@ class _GameCard extends StatelessWidget {
     }
   }
 
-  static final _radius = BorderRadius.circular(14);
+  static final _radius = BorderRadius.circular(16);
 
   @override
   Widget build(BuildContext context) {
@@ -663,6 +667,7 @@ class _GameCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
+                          fontFamily: 'Bricolage Grotesque',
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
@@ -671,7 +676,7 @@ class _GameCard extends StatelessWidget {
                       if (game.hasPlaytimeData)
                         Text(
                           '${game.playtimeForeverHours.toStringAsFixed(1)} h gespielt',
-                          style: const TextStyle(
+                          style: zerMonoTextStyle.copyWith(
                             color: Colors.white70,
                             fontSize: 12,
                           ),

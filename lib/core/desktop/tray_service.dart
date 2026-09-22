@@ -22,11 +22,11 @@ class TrayService with TrayListener, WindowListener {
 
     trayManager.addListener(this);
     await trayManager.setIcon('assets/icons/tray_icon.ico');
-    await trayManager.setToolTip('GameLib');
+    await trayManager.setToolTip('GameZer');
     await trayManager.setContextMenu(
       Menu(
         items: [
-          MenuItem(key: 'show', label: 'GameLib anzeigen'),
+          MenuItem(key: 'show', label: 'GameZer anzeigen'),
           MenuItem.separator(),
           MenuItem(key: 'quit', label: 'Beenden'),
         ],

@@ -317,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return [
       Text(
-        'Meldet dich mit einem GameLib-Konto an, damit verbundene Steam-/'
+        'Meldet dich mit einem GameZer-Konto an, damit verbundene Steam-/'
         'itch.io-/IsThereAnyDeal-Konten und deine Epic-Bibliothek automatisch '
         'mit deinen anderen Geräten abgeglichen werden — ohne QR-Code, im '
         'Hintergrund bei jedem Aktualisieren.',
