@@ -1,0 +1,72 @@
+# Builds the Windows app and wraps it in an Inno Setup installer.
+# - Every push to master, every pull request and every manual run: the
+#   installer is attached to the workflow run as an artifact
+#   ("GameZer-Setup").
+# - Pushing a tag like v1.2.0: additionally publishes a GitHub Release with
+#   the installer, which is the public download link.
+name: Windows installer
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build Windows app
+        run: flutter build windows --release
+
+      # Flutter apps need the Visual C++ runtime; shipping the three DLLs
+      # next to the exe saves users from installing the redistributable.
+      - name: Bundle Visual C++ runtime
+        shell: pwsh
+        run: |
+          $dest = 'build\windows\x64\runner\Release'
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR\System32\$dll" $dest
+          }
+
+      - name: Read version from pubspec.yaml
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DMyAppVersion=${{ steps.version.outputs.version }}" installer\gamezer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameZer-Setup
+          path: build/installer/*.exe
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/installer/*.exe
+          generate_release_notes: true
