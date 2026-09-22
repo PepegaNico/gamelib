@@ -112,6 +112,10 @@ class XboxLiveService {
           continue;
         case 'authorization_declined':
           throw XboxLiveException('Anmeldung wurde abgelehnt.');
+        case 'expired_token':
+          throw XboxLiveException(
+            'Der Code ist abgelaufen. Bitte erneut anmelden.',
+          );
         default:
           throw XboxLiveException(
             'Microsoft-Anmeldung fehlgeschlagen '
