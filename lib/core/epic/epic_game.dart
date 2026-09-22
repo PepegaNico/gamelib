@@ -189,6 +189,10 @@ class EpicGame implements LibraryGame {
   @override
   DateTime? get lastPlayed => null;
 
+  /// Installed via the launcher, or launchable through legendary.
+  @override
+  bool get canLaunch => isInstalled || viaLegendary;
+
   @override
   String get primaryActionLabel => 'Spiel starten';
 

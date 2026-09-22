@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../../core/epic/epic_game.dart';
+import '../../core/playstation/playstation_game.dart';
 import '../../core/sync/firebase_auth_service.dart';
 import '../../core/sync/firestore_sync_service.dart';
 import '../../core/sync/qr_credentials_payload.dart';
@@ -12,6 +13,7 @@ import '../../core/xbox/xbox_game.dart';
 import '../auth/auth_state.dart';
 import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
+import '../playstation/playstation_state.dart';
 import '../wishlist/wishlist_state.dart';
 import '../xbox/xbox_state.dart';
 
@@ -54,6 +56,9 @@ class SyncState extends ChangeNotifier {
 
   /// Same as [syncedEpicGames], for Xbox app / Microsoft Store games.
   List<XboxGame> syncedXboxGames = [];
+
+  /// Same as [syncedEpicGames], for the PlayStation account's games.
+  List<PlaystationGame> syncedPlaystationGames = [];
 
   /// The current Firebase refresh token, for embedding in the QR-code
   /// pairing payload so another device (e.g. the native iOS app) can join
@@ -162,6 +167,7 @@ class SyncState extends ChangeNotifier {
     required WishlistState wishlist,
     required EpicState epic,
     required XboxState xbox,
+    required PlaystationState playstation,
   }) async {
     if (status != SyncStatus.loggedIn) return 'Nicht angemeldet.';
 
@@ -241,6 +247,27 @@ class SyncState extends ChangeNotifier {
           syncedXboxGames = (jsonDecode(xboxJson) as List)
               .cast<Map<String, dynamic>>()
               .map(XboxGame.fromSyncJson)
+              .toList();
+        }
+      }
+
+      if (playstation.games.isNotEmpty) {
+        await _syncService.uploadPlaystationLibrary(
+          idToken: token,
+          uid: _uid!,
+          payloadJson: jsonEncode([
+            for (final g in playstation.games) g.toSyncJson(),
+          ]),
+        );
+      } else {
+        final psJson = await _syncService.downloadPlaystationLibrary(
+          idToken: token,
+          uid: _uid!,
+        );
+        if (psJson != null) {
+          syncedPlaystationGames = (jsonDecode(psJson) as List)
+              .cast<Map<String, dynamic>>()
+              .map(PlaystationGame.fromSyncJson)
               .toList();
         }
       }

@@ -28,6 +28,12 @@ enum GamePlatform {
     Color(0xFF107C10),
     Icons.sports_esports,
     'assets/brands/xbox.svg',
+  ),
+  playstation(
+    'PlayStation',
+    Color(0xFF0070D1),
+    Icons.gamepad,
+    'assets/brands/playstation.svg',
   );
 
   const GamePlatform(this.label, this.color, this.icon, this.logoAsset);

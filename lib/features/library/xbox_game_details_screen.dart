@@ -26,12 +26,24 @@ class XboxGameDetailsScreen extends StatelessWidget {
               stats: [
                 game.isInstalled
                     ? (Icons.check_circle_outline, 'Installiert')
-                    : (Icons.cloud_outlined, 'Auf einem anderen Gerät'),
+                    : (Icons.cloud_outlined, 'Nicht auf diesem PC'),
+                if (game.lastPlayedAt != null)
+                  (Icons.event, 'Zuletzt ${_formatDate(game.lastPlayedAt!)}'),
+                if (game.hasAchievements)
+                  (
+                    Icons.emoji_events_outlined,
+                    '${game.achievementsEarned}/${game.achievementsTotal} Erfolge',
+                  ),
+                if ((game.gamerscoreTotal ?? 0) > 0)
+                  (
+                    Icons.stars_rounded,
+                    '${game.gamerscoreEarned}/${game.gamerscoreTotal} G',
+                  ),
                 if (game.developer != null)
                   (Icons.code_rounded, game.developer!),
               ],
               actions: [
-                if (game.isInstalled)
+                if (game.canLaunch)
                   FilledButton.icon(
                     onPressed: () => launchLibraryGame(context, game),
                     icon: const Icon(Icons.play_arrow_rounded),
@@ -65,7 +77,9 @@ class XboxGameDetailsScreen extends StatelessWidget {
                   ),
                 const SizedBox(height: 12),
                 Text(
-                  'Xbox und der Microsoft Store geben keine Spielzeit- oder Erfolgsdaten ohne Microsoft-Login heraus.',
+                  game.hasAchievements
+                      ? 'Xbox meldet keine Spielzeit in Stunden, nur Erfolge und das letzte Spieldatum.'
+                      : 'Melde dich in den Einstellungen mit deinem Xbox-Konto an, um Erfolge und das letzte Spieldatum zu sehen.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -76,3 +90,6 @@ class XboxGameDetailsScreen extends StatelessWidget {
     );
   }
 }
+
+String _formatDate(DateTime date) =>
+    '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';

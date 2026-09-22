@@ -14,6 +14,7 @@ import 'features/auth/login_screen.dart';
 import 'features/epic/epic_state.dart';
 import 'features/itchio/itchio_state.dart';
 import 'features/library/library_state.dart';
+import 'features/playstation/playstation_state.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/app_shell.dart';
 import 'features/sync/sync_state.dart';
@@ -78,6 +79,7 @@ class GameLibApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ItchioState()..restore()),
         ChangeNotifierProvider(create: (_) => EpicState()),
         ChangeNotifierProvider(create: (_) => XboxState()),
+        ChangeNotifierProvider(create: (_) => PlaystationState()),
         ChangeNotifierProvider(create: (_) => WishlistState()..restore()),
         ChangeNotifierProvider(create: (_) => SyncState()..restore()),
       ],

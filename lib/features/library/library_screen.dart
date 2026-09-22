@@ -16,6 +16,7 @@ import '../../core/widgets/hover_lift.dart';
 import '../auth/auth_state.dart';
 import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
+import '../playstation/playstation_state.dart';
 import '../shell/app_shell.dart';
 import '../sync/sync_state.dart';
 import '../updates/updates_state.dart';
@@ -84,12 +85,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final wishlist = context.read<WishlistState>();
     final sync = context.read<SyncState>();
     final xbox = context.read<XboxState>();
+    final playstation = context.read<PlaystationState>();
 
     // Epic first — its own scan has to finish before sync() runs, since
     // sync() decides whether to push or pull the Epic snapshot based on
     // whether this device found anything locally (see SyncState.sync).
-    // Same for Xbox/Microsoft Store.
-    await Future.wait([epic.refresh(), xbox.refresh()]);
+    // Same for Xbox and PlayStation.
+    await Future.wait([epic.refresh(), xbox.refresh(), playstation.refresh()]);
     if (!mounted) return;
 
     if (sync.status == SyncStatus.loggedIn) {
@@ -99,6 +101,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         wishlist: wishlist,
         epic: epic,
         xbox: xbox,
+        playstation: playstation,
       );
       if (!mounted) return;
     }
@@ -119,6 +122,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
     library.setXboxGames(
       xbox.games.isNotEmpty ? xbox.games : sync.syncedXboxGames,
+    );
+    library.setPlaystationGames(
+      playstation.games.isNotEmpty
+          ? playstation.games
+          : sync.syncedPlaystationGames,
     );
     unawaited(context.read<UpdatesState>().checkForUpdates(library.steamGames));
     unawaited(library.prefetchAppDetails());
@@ -874,10 +882,14 @@ class _HeroBanner extends StatelessWidget {
                             vertical: 16,
                           ),
                         ),
-                        icon: const Icon(Icons.play_arrow_rounded),
-                        label: const Text(
-                          'Spielen',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                        icon: Icon(
+                          game.canLaunch
+                              ? Icons.play_arrow_rounded
+                              : Icons.open_in_new,
+                        ),
+                        label: Text(
+                          game.canLaunch ? 'Spielen' : 'Im Store öffnen',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1092,9 +1104,9 @@ class _GameCardState extends State<_GameCard> {
                           tooltip: game.primaryActionLabel,
                           visualDensity: VisualDensity.compact,
                           icon: Icon(
-                            game.platform == GamePlatform.itchio
-                                ? Icons.open_in_new
-                                : Icons.play_arrow_rounded,
+                            game.canLaunch
+                                ? Icons.play_arrow_rounded
+                                : Icons.open_in_new,
                             color: zerOnAccent,
                           ),
                           onPressed: () => launchLibraryGame(context, game),

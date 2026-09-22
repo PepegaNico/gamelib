@@ -1,7 +1,7 @@
 # GameZer
 
-Alle deine PC-Spiele an einem Ort: Steam, Epic Games, Xbox / Microsoft Store
-und itch.io in einer Bibliothek, mit Wunschliste, Preisalarmen und
+Alle deine Spiele an einem Ort: Steam, Epic Games, Xbox / Microsoft Store,
+PlayStation und itch.io in einer Bibliothek, mit Wunschliste, Preisalarmen und
 Cloud-Sync zur iPhone-App.
 
 ## Installieren (Windows)
@@ -22,8 +22,17 @@ Version.
 |---|---|---|
 | Steam | Steam Web API (API-Key + Steam-Login) — alle besessenen Spiele | `steam://run/<id>` |
 | Epic Games | installierte Spiele aus den Launcher-Dateien; ganze Bibliothek optional über [Legendary](https://github.com/derrod/legendary) | Epic-Launcher-Link |
-| Xbox / Microsoft Store | installierte PC-Spiele (Pakete mit `MicrosoftGame.config`) | direkt über Windows |
+| Xbox / Microsoft Store | installierte PC-Spiele (Pakete mit `MicrosoftGame.config`); mit Microsoft-Login zusätzlich alle auf Konsole/PC/Cloud gespielten Spiele samt Erfolgen | installierte direkt über Windows |
+| PlayStation | alle gespielten PS4-/PS5-Spiele mit Spielzeit (NPSSO-Code, inoffizielle Schnittstelle) | Store-Seite |
 | itch.io | itch.io API-Key | Store-Seite |
+
+## Xbox-Konto einrichten (einmalig, für Entwickler)
+
+Die Microsoft-Anmeldung braucht eine eigene App-Registrierung. Solange
+`XboxLiveConfig.clientId` in
+[lib/core/xbox/xbox_live_config.dart](lib/core/xbox/xbox_live_config.dart)
+leer ist, ist der Xbox-Login ausgeblendet (installierte Spiele funktionieren
+trotzdem). Die Schritte stehen in der Datei.
 
 ## Entwickeln
 

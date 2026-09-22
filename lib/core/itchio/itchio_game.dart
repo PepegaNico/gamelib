@@ -74,6 +74,9 @@ class ItchioGame implements LibraryGame {
   DateTime? get lastPlayed => null;
 
   @override
+  bool get canLaunch => false;
+
+  @override
   String get primaryActionLabel => 'Auf itch.io öffnen';
 
   @override

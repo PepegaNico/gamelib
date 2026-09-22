@@ -74,6 +74,9 @@ class SteamGame implements LibraryGame {
   String get launchUrl => 'steam://run/$appId';
 
   @override
+  bool get canLaunch => true;
+
+  @override
   String get primaryActionLabel => 'Spiel starten';
 
   @override

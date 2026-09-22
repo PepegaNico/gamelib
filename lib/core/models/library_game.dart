@@ -29,5 +29,9 @@ abstract class LibraryGame {
   /// launcher URI, or "Auf itch.io öffnen" when there's no reliable local
   /// launch mechanism).
   String get primaryActionLabel;
+
+  /// True when the primary action actually starts the game on this PC
+  /// (vs. opening a store page, e.g. console games).
+  bool get canLaunch;
   String get primaryActionUrl;
 }

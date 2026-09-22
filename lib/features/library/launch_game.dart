@@ -14,7 +14,7 @@ Future<void> launchLibraryGame(BuildContext context, LibraryGame game) async {
     return;
   }
 
-  final launched = game is XboxGame && game.isInstalled
+  final launched = game is XboxGame && game.canLaunch
       ? await game.launch()
       : await launchUrl(Uri.parse(game.primaryActionUrl));
   if (!launched && context.mounted) {
