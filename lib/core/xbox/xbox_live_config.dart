@@ -10,7 +10,7 @@
 /// 3. Authentication → Advanced settings → "Allow public client flows": Yes.
 /// 4. Copy the "Application (client) ID" into [clientId] below.
 class XboxLiveConfig {
-  static const clientId = '';
+  static const clientId = '975d0170-510a-48ad-9d90-5d7ec25cf3d8';
 
   static bool get isConfigured => clientId.isNotEmpty;
 }
