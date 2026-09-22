@@ -24,6 +24,8 @@
   <ul>
     <li><strong>Steam-Web-API-Key und Steam-ID:</strong> gespeichert im geschützten Speicher deines Geräts (iOS-Schlüsselbund bzw. Windows-Anmeldeinformationen) und nur an Steam gesendet, um deine Bibliothek zu laden.</li>
     <li><strong>itch.io- und IsThereAnyDeal-Schlüssel</strong> (nur Windows): lokal gespeichert und nur an den jeweiligen Dienst gesendet.</li>
+    <li><strong>Xbox-Konto</strong> (nur Windows, freiwillig): Die Anmeldung läuft direkt über Microsoft. GameZer speichert nur das Anmelde-Token von Microsoft lokal und fragt damit deine gespielten Xbox-Spiele, Erfolge und dein Gamertag bei Xbox Live ab.</li>
+    <li><strong>PlayStation-Konto</strong> (nur Windows, freiwillig): Den NPSSO-Code, den du einfügst, tauscht GameZer einmalig bei Sony gegen ein Anmelde-Token. Nur dieses Token wird lokal gespeichert und damit deine gespielten PS4-/PS5-Spiele samt Spielzeit bei Sony abgefragt.</li>
     <li><strong>Kamera</strong> (nur iPhone): wird ausschliesslich verwendet, um den Cloud-Sync-QR-Code vom PC zu scannen. Bilder werden nicht gespeichert oder übertragen.</li>
     <li><strong>Lokal installierte Spiele</strong> (nur Windows): GameZer liest die Installationsdateien von Epic Games und Xbox / Microsoft Store auf deinem PC, um installierte Spiele zu finden und zu starten.</li>
   </ul>
@@ -35,14 +37,14 @@
       <tr><th>Daten</th><th>Zweck</th></tr>
       <tr><td>E-Mail-Adresse und Passwort (verschlüsselt durch Firebase)</td><td>Anmeldung beim Cloud-Sync-Konto</td></tr>
       <tr><td>Verbundene Steam-IDs und API-Keys, itch.io- und IsThereAnyDeal-Schlüssel</td><td>Gleiche Konten auf allen deinen Geräten</td></tr>
-      <tr><td>Liste deiner Epic-Games- und Xbox-Spiele (Titel, Bilder, Beschreibung)</td><td>Anzeige dieser Spiele auf dem iPhone</td></tr>
+      <tr><td>Liste deiner Epic-Games-, Xbox- und PlayStation-Spiele (Titel, Bilder, Beschreibung, Spielzeit, letztes Spieldatum, Xbox-Erfolge)</td><td>Anzeige dieser Spiele auf dem iPhone</td></tr>
       <tr><td>Deine Wunschliste mit Zielpreisen</td><td>Anzeige auf allen Geräten</td></tr>
     </table>
   </div>
   <p>Diese Daten werden nur für den Sync verwendet, nicht ausgewertet und nicht an Dritte weitergegeben. Google verarbeitet sie als Auftragsverarbeiter; siehe die <a href="https://firebase.google.com/support/privacy">Datenschutzhinweise von Firebase</a>. Die Daten können dabei auch ausserhalb der Schweiz bzw. der EU gespeichert werden.</p>
 
   <h2>Abfragen bei Drittanbietern</h2>
-  <p>Um Spiele, Bilder, Preise und Neuigkeiten anzuzeigen, ruft GameZer öffentliche Schnittstellen dieser Dienste direkt von deinem Gerät aus auf: Steam (Valve), Epic Games Store, Microsoft Store, IsThereAnyDeal und itch.io. Dabei sehen diese Dienste – wie bei jedem Webseitenaufruf – deine IP-Adresse. Es gelten deren Datenschutzbestimmungen.</p>
+  <p>Um Spiele, Bilder, Preise und Neuigkeiten anzuzeigen, ruft GameZer Schnittstellen dieser Dienste direkt von deinem Gerät aus auf: Steam (Valve), Epic Games Store, Microsoft Store und Xbox Live (Microsoft), PlayStation Network (Sony), IsThereAnyDeal und itch.io. Dabei sehen diese Dienste – wie bei jedem Webseitenaufruf – deine IP-Adresse. Es gelten deren Datenschutzbestimmungen.</p>
 
   <h2>Speicherdauer und Löschung</h2>
   <ul>
