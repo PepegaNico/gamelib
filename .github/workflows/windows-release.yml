@@ -1,7 +1,7 @@
 # Builds the Windows app and wraps it in an Inno Setup installer.
 # - Every push to master, every pull request and every manual run: the
 #   installer is attached to the workflow run as an artifact
-#   ("GameZer-Setup").
+#   ("GameZer-Setup"), plus the Microsoft Store package ("GameZer-Store-MSIX").
 # - Pushing a tag like v1.2.0: additionally publishes a GitHub Release with
 #   the installer, which is the public download link.
 name: Windows installer
@@ -63,6 +63,16 @@ jobs:
         with:
           name: GameZer-Setup
           path: build/installer/*.exe
+
+      # Microsoft Store package from the same build (config: msix_config in
+      # pubspec.yaml). Unsigned on purpose — the Store signs it on upload.
+      - name: Build Microsoft Store package
+        run: dart run msix:create --build-windows false --output-path build/msix --output-name GameZer-Store
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameZer-Store-MSIX
+          path: build/msix/*.msix
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')

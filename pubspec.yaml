@@ -59,6 +59,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  msix: ^3.18.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -122,3 +123,21 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Microsoft Store package (MSIX). Built by .github/workflows/windows-release.yml
+# with `dart run msix:create`; the Store signs it on upload. Identity values
+# come from Partner Center → GameZer by ZerApps → Product identity.
+msix_config:
+  display_name: GameZer by ZerApps
+  publisher_display_name: ZerApps
+  identity_name: ZerApps.GameZerbyZerApps
+  publisher: CN=2ACB184D-4431-4C81-AE53-F9A89781F7B2
+  logo_path: assets/icons/app_icon_1024.png
+  languages: de-de, en-us
+  capabilities: internetClient
+  store: true
+  # Off by default (Store policy); users can enable it under
+  # Settings → Apps → Startup. Replaces the installer's Run registry key.
+  startup_task:
+    task_id: GameZerStartup
+    enabled: false
