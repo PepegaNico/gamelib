@@ -33,13 +33,23 @@ class QrCredentialsPayload {
       itadApiKey == null &&
       syncRefreshToken == null;
 
+  /// Only the Cloud-Sync token — what the iPhone app needs to pair. Much
+  /// shorter than the full payload, so the QR code stays scannable.
+  const QrCredentialsPayload.pairingOnly(String this.syncRefreshToken)
+    : steamAccounts = const [],
+      itchioApiKeys = const [],
+      itadApiKey = null;
+
+  /// Empty lists are left out to keep the QR code small; [decode] treats a
+  /// missing list as empty.
   String encode() {
     final map = <String, dynamic>{
       'v': 1,
-      'steam': [
-        for (final a in steamAccounts) {'id': a.steamId, 'key': a.apiKey},
-      ],
-      'itchio': itchioApiKeys,
+      if (steamAccounts.isNotEmpty)
+        'steam': [
+          for (final a in steamAccounts) {'id': a.steamId, 'key': a.apiKey},
+        ],
+      if (itchioApiKeys.isNotEmpty) 'itchio': itchioApiKeys,
       if (itadApiKey != null) 'itad': itadApiKey,
       if (syncRefreshToken != null) 'syncToken': syncRefreshToken,
     };

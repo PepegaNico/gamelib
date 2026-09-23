@@ -225,7 +225,7 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
             child: TextField(
               controller: _controller,
               onSubmitted: _search,
@@ -235,7 +235,6 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
                 hintText: 'Spiele im Epic Store und Steam Shop suchen…',
-                border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.arrow_forward),
                   onPressed: () => _search(_controller.text),
@@ -244,7 +243,7 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -256,14 +255,18 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 for (final store in [GamePlatform.steam, GamePlatform.epic])
                   FilterChip(
-                    avatar: Icon(store.icon, size: 16),
+                    avatar: PlatformLogo(
+                      store,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                     label: Text(store.label),
                     selected: _selectedStores.contains(store),
                     onSelected: (selected) => setState(() {
@@ -293,7 +296,7 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
           ),
           if (genres.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
               child: SizedBox(
                 height: 36,
                 child: ListView(
@@ -344,7 +347,7 @@ class _StoreSearchScreenState extends State<StoreSearchScreen> {
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 240,
         childAspectRatio: 3 / 4,
@@ -464,7 +467,7 @@ class _StoreResultCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(result.platform.icon, size: 12, color: Colors.white),
+                      PlatformLogo(result.platform, size: 12),
                       const SizedBox(width: 4),
                       Text(
                         result.platform.label,

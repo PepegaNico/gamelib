@@ -1,17 +1,58 @@
-# gamelib
+# GameZer
 
-A new Flutter project.
+Alle deine Spiele an einem Ort: Steam, Epic Games, Xbox / Microsoft Store,
+PlayStation und itch.io in einer Bibliothek, mit Wunschliste, Preisalarmen und
+Cloud-Sync zur iPhone-App.
 
-## Getting Started
+## Installieren (Windows)
 
-This project is a starting point for a Flutter application.
+1. Unter [Releases](https://github.com/PepegaNico/gamelib/releases) die
+   neueste `GameZer-Setup-x.y.z.exe` herunterladen.
+2. Ausführen. Windows SmartScreen warnt beim ersten Mal, weil der Installer
+   nicht signiert ist: **Weitere Informationen → Trotzdem ausführen**.
+3. Die Installation braucht keine Administratorrechte. Optional:
+   Desktop-Verknüpfung und Autostart.
 
-A few resources to get you started if this is your first Flutter project:
+Updates: einfach die neue Setup-Datei ausführen, sie ersetzt die alte
+Version.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Was die App findet
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Store | Wie | Starten |
+|---|---|---|
+| Steam | Steam Web API (API-Key + Steam-Login) — alle besessenen Spiele | `steam://run/<id>` |
+| Epic Games | installierte Spiele aus den Launcher-Dateien; ganze Bibliothek optional über [Legendary](https://github.com/derrod/legendary) | Epic-Launcher-Link |
+| Xbox / Microsoft Store | installierte PC-Spiele (Pakete mit `MicrosoftGame.config`); mit Microsoft-Login zusätzlich alle auf Konsole/PC/Cloud gespielten Spiele samt Erfolgen | installierte direkt über Windows |
+| PlayStation | alle gespielten PS4-/PS5-Spiele mit Spielzeit (NPSSO-Code, inoffizielle Schnittstelle) | Store-Seite |
+| itch.io | itch.io API-Key | Store-Seite |
+
+## Xbox-Konto einrichten (einmalig, für Entwickler)
+
+Die Microsoft-Anmeldung braucht eine eigene App-Registrierung. Solange
+`XboxLiveConfig.clientId` in
+[lib/core/xbox/xbox_live_config.dart](lib/core/xbox/xbox_live_config.dart)
+leer ist, ist der Xbox-Login ausgeblendet (installierte Spiele funktionieren
+trotzdem). Die Schritte stehen in der Datei.
+
+## Entwickeln
+
+```bash
+flutter pub get
+flutter run -d windows
+```
+
+## Neue Version veröffentlichen
+
+1. `version:` in `pubspec.yaml` erhöhen.
+2. Committen, dann einen Tag pushen:
+
+   ```bash
+   git tag v1.1.0
+   git push origin v1.1.0
+   ```
+
+3. Die GitHub Action [Windows installer](.github/workflows/windows-release.yml)
+   baut die App, erstellt den Installer mit Inno Setup
+   ([installer/gamezer.iss](installer/gamezer.iss)) und hängt ihn an ein
+   neues Release. Jeder Push auf `master` und jeder Pull Request baut den
+   Installer ebenfalls und legt ihn als Artefakt am Workflow-Lauf ab.

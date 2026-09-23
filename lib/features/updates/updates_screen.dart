@@ -61,6 +61,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               itemBuilder: (context, index) {
                 final item = state.recentItems[index];
                 return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 6,
+                  ),
                   title: Text(
                     item.title,
                     maxLines: 2,

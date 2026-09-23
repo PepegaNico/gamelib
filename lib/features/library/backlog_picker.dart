@@ -2,13 +2,12 @@ import 'dart:math';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_theme.dart';
-import '../../core/epic/epic_game.dart';
+import '../../core/models/game_platform.dart';
 import '../../core/models/library_game.dart';
-import '../epic/epic_launch.dart';
 import 'game_details_dispatch.dart';
+import 'launch_game.dart';
 
 Future<void> showBacklogPicker(BuildContext context, List<LibraryGame> games) {
   return showDialog(
@@ -112,12 +111,7 @@ class _BacklogPickerDialogState extends State<_BacklogPickerDialog>
   }
 
   Future<void> _launch() async {
-    final pick = _pick;
-    if (pick is EpicGame) {
-      await launchEpicGame(context, pick);
-      return;
-    }
-    await launchUrl(Uri.parse(pick.primaryActionUrl));
+    await launchLibraryGame(context, _pick);
   }
 
   @override
@@ -134,7 +128,17 @@ class _BacklogPickerDialogState extends State<_BacklogPickerDialog>
     return AlertDialog(
       backgroundColor: zerSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('Was soll ich heute spielen?'),
+      titlePadding: const EdgeInsets.fromLTRB(24, 16, 12, 0),
+      title: Row(
+        children: [
+          const Expanded(child: Text('Was soll ich heute spielen?')),
+          IconButton(
+            tooltip: 'Schliessen',
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: _reelViewportWidth,
         child: Column(
@@ -276,7 +280,7 @@ class _ReelCard extends StatelessWidget {
                 ? Container(
                     color: game.platform.color,
                     alignment: Alignment.center,
-                    child: Icon(game.platform.icon, size: 26, color: Colors.white24),
+                    child: PlatformLogo(game.platform, size: 28, color: Colors.white24),
                   )
                 : CachedNetworkImage(imageUrl: game.headerImageUrl, fit: BoxFit.cover),
           ),

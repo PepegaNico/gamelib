@@ -1,9 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/epic/epic_game.dart';
 import '../../core/epic/epic_store_api_service.dart';
+import '../../core/widgets/game_details_hero.dart';
 import '../epic/epic_launch.dart';
 
 /// Mirrors [GameDetailsScreen]'s layout as closely as Epic's much thinner
@@ -53,100 +53,59 @@ class _EpicGameDetailsScreenState extends State<EpicGameDetailsScreen> {
     final game = widget.game;
 
     return Scaffold(
-      appBar: AppBar(title: Text(game.name)),
       body: SingleChildScrollView(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AspectRatio(
-                  aspectRatio: 460 / 215,
-                  child: game.headerImageUrl.isEmpty
-                      ? Container(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                        )
-                      : CachedNetworkImage(
-                          imageUrl: game.headerImageUrl,
-                          fit: BoxFit.cover,
-                          errorWidget: (context, url, error) => Container(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                          ),
-                        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GameDetailsHero(
+              imageUrl: game.headerImageUrl,
+              platform: game.platform,
+              title: game.name,
+              stats: [
+                game.isInstalled
+                    ? (Icons.check_circle_outline, 'Installiert')
+                    : (Icons.cloud_outlined, 'Nicht installiert'),
+                if (game.resolvedDeveloper != null)
+                  (Icons.code_rounded, game.resolvedDeveloper!),
+              ],
+              actions: [
+                FilledButton.icon(
+                  onPressed: _launch,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Spielen'),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        game.name,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 8,
-                        children: [
-                          Chip(
-                            avatar: Icon(
-                              game.isInstalled
-                                  ? Icons.check_circle_outline
-                                  : Icons.cloud_outlined,
-                              size: 16,
-                            ),
-                            label: Text(
-                              game.isInstalled
-                                  ? 'Installiert'
-                                  : 'Über Legendary bekannt, nicht installiert',
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          FilledButton.icon(
-                            onPressed: _launch,
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('Spiel starten'),
-                          ),
-                          const SizedBox(width: 12),
-                          OutlinedButton.icon(
-                            onPressed: _openStorePage,
-                            icon: const Icon(Icons.open_in_new),
-                            label: const Text('Store-Seite öffnen'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      if (_loading)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (game.resolvedDescription == null &&
-                          game.resolvedDeveloper == null &&
-                          game.resolvedCategories.isEmpty)
-                        Text(
-                          'Für dieses Spiel sind keine zusätzlichen Store-Informationen verfügbar.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        )
-                      else
-                        _DetailsBody(game: game),
-                    ],
+                OutlinedButton.icon(
+                  onPressed: _openStorePage,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white30),
                   ),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Store-Seite'),
                 ),
               ],
             ),
-          ),
+            GameDetailsBody(
+              children: [
+                if (_loading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (game.resolvedDescription == null &&
+                    game.resolvedDeveloper == null &&
+                    game.resolvedCategories.isEmpty)
+                  Text(
+                    'Für dieses Spiel sind keine zusätzlichen Store-Informationen verfügbar.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  )
+                else
+                  _DetailsBody(game: game),
+              ],
+            ),
+          ],
         ),
       ),
     );

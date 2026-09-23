@@ -1,16 +1,21 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/models/game_platform.dart';
 import '../auth/auth_state.dart';
 import '../epic/epic_state.dart';
 import '../itchio/itchio_state.dart';
+import '../library/library_state.dart';
+import '../playstation/playstation_state.dart';
 import '../sync/qr_export_screen.dart';
 import '../sync/qr_import_screen.dart';
 import '../sync/sync_state.dart';
 import '../wishlist/wishlist_state.dart';
+import '../xbox/xbox_state.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -36,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   final _syncEmailController = TextEditingController();
   final _syncPasswordController = TextEditingController();
+  final _npssoController = TextEditingController();
   bool _syncIsRegistering = false;
 
   @override
@@ -46,6 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _itadController.dispose();
     _syncEmailController.dispose();
     _syncPasswordController.dispose();
+    _npssoController.dispose();
     super.dispose();
   }
 
@@ -167,6 +174,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       itchio: context.read<ItchioState>(),
       wishlist: context.read<WishlistState>(),
       epic: context.read<EpicState>(),
+      xbox: context.read<XboxState>(),
+      playstation: context.read<PlaystationState>(),
     );
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -190,6 +199,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final epic = context.watch<EpicState>();
     final wishlist = context.watch<WishlistState>();
     final sync = context.watch<SyncState>();
+    final xbox = context.watch<XboxState>();
+    final playstation = context.watch<PlaystationState>();
     final needsSteamSetup = auth.status == AuthStatus.needsApiKey;
 
     return Scaffold(
@@ -207,6 +218,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 else
                   _SettingsSection(
                     icon: Icons.videogame_asset,
+                    platform: GamePlatform.steam,
                     title: 'Steam',
                     status: _statusChip('${auth.accounts.length} Konto(en)'),
                     children: _buildSteamSectionChildren(auth),
@@ -214,6 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 _SettingsSection(
                   icon: Icons.grid_view_rounded,
+                  platform: GamePlatform.itchio,
                   title: 'itch.io',
                   status: itchio.isConnected
                       ? _statusChip('${itchio.accounts.length} Konto(en)')
@@ -223,9 +236,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 _SettingsSection(
                   icon: Icons.games_outlined,
+                  platform: GamePlatform.epic,
                   title: 'Epic Games',
                   status: _epicStatusChip(epic, sync),
                   children: _buildEpicSectionChildren(epic, sync),
+                ),
+                const SizedBox(height: 12),
+                _SettingsSection(
+                  icon: Icons.sports_esports,
+                  platform: GamePlatform.xbox,
+                  title: 'Xbox / Microsoft Store',
+                  status: xbox.games.isNotEmpty
+                      ? _statusChip('${xbox.games.length} Spiele')
+                      : null,
+                  children: _buildXboxSectionChildren(xbox, sync),
+                ),
+                const SizedBox(height: 12),
+                _SettingsSection(
+                  icon: Icons.gamepad,
+                  platform: GamePlatform.playstation,
+                  title: 'PlayStation',
+                  status: playstation.isConnected
+                      ? _statusChip('${playstation.games.length} Spiele')
+                      : null,
+                  children: _buildPlaystationSectionChildren(playstation, sync),
                 ),
                 const SizedBox(height: 12),
                 _SettingsSection(
@@ -318,7 +352,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return [
       Text(
         'Meldet dich mit einem GameZer-Konto an, damit verbundene Steam-/'
-        'itch.io-/IsThereAnyDeal-Konten und deine Epic-Bibliothek automatisch '
+        'itch.io-/IsThereAnyDeal-Konten, deine Epic-, Xbox- und '
+        'PlayStation-Spiele und die Wunschliste automatisch '
         'mit deinen anderen Geräten abgeglichen werden — ohne QR-Code, im '
         'Hintergrund bei jedem Aktualisieren.',
         style: Theme.of(context).textTheme.bodyMedium,
@@ -603,6 +638,316 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
   }
 
+  List<Widget> _buildXboxSectionChildren(XboxState xbox, SyncState sync) {
+    final syncedCount = sync.syncedXboxGames.length;
+    return [
+      Text(
+        Platform.isWindows
+            ? 'Die App findet automatisch alle PC-Spiele, die über die Xbox-App '
+                  'oder den Microsoft Store installiert sind (rein lokal, kein '
+                  'Login nötig). Cover und Beschreibung kommen aus dem '
+                  'öffentlichen Microsoft-Store-Katalog.'
+            : syncedCount > 0
+            ? '$syncedCount Spiele wurden von deinem Windows-PC über '
+                  'Cloud-Sync übertragen (nur ansehen — starten geht nur auf '
+                  'dem PC).'
+            : 'Xbox-/Microsoft-Store-Spiele werden auf deinem Windows-PC '
+                  'erkannt und erscheinen hier, sobald du dort bei Cloud-Sync '
+                  'angemeldet bist.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      if (Platform.isWindows) ...[
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                xbox.isLoading
+                    ? 'Suche installierte Spiele…'
+                    : xbox.hasScanned
+                    ? '${xbox.games.length} Spiele gefunden'
+                    : 'Noch nicht gesucht',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: xbox.isLoading
+                  ? null
+                  : () async {
+                      final library = context.read<LibraryState>();
+                      await xbox.refresh();
+                      library.setXboxGames(xbox.games);
+                    },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Erneut suchen'),
+            ),
+          ],
+        ),
+      ],
+      ..._buildXboxAccountChildren(xbox),
+    ];
+  }
+
+  Future<void> _xboxSignIn() async {
+    final xbox = context.read<XboxState>();
+    final library = context.read<LibraryState>();
+    final error = await xbox.signIn();
+    if (error == null) library.setXboxGames(xbox.games);
+  }
+
+  Future<void> _xboxSignOut() async {
+    final xbox = context.read<XboxState>();
+    final library = context.read<LibraryState>();
+    await xbox.signOut();
+    library.setXboxGames(xbox.games);
+  }
+
+  List<Widget> _buildXboxAccountChildren(XboxState xbox) {
+    if (!Platform.isWindows || !xbox.canSignIn) return [];
+    final code = xbox.pendingCode;
+    return [
+      const SizedBox(height: 8),
+      const Divider(),
+      const SizedBox(height: 8),
+      Text('Xbox-Konto', style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: 4),
+      if (xbox.isSignedIn)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.check_circle, color: Colors.green),
+          title: Text('Angemeldet als ${xbox.gamertag}'),
+          subtitle: Text(
+            '${xbox.games.length - xbox.installedCount} weitere gespielte '
+            'Spiele von Konsole, PC und Cloud',
+          ),
+          trailing: IconButton(
+            tooltip: 'Abmelden',
+            icon: const Icon(Icons.link_off),
+            onPressed: _xboxSignOut,
+          ),
+        )
+      else if (code != null) ...[
+        Text(
+          'Öffne die Microsoft-Seite, melde dich mit deinem Xbox-Konto an '
+          'und gib diesen Code ein:',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 10),
+        SelectableText(
+          code.userCode,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontFamily: 'IBM Plex Mono',
+            letterSpacing: 4,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: code.userCode));
+                launchUrl(
+                  Uri.parse(code.verificationUri),
+                  mode: LaunchMode.externalApplication,
+                );
+              },
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: const Text('Code kopieren und Seite öffnen'),
+            ),
+            TextButton(
+              onPressed: xbox.cancelSignIn,
+              child: const Text('Abbrechen'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Warte auf die Anmeldung…',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ] else ...[
+        Text(
+          'Melde dich mit deinem Microsoft-Konto an, um alle Spiele zu sehen, '
+          'die du auf Xbox-Konsolen, dem PC oder in der Cloud gespielt hast – '
+          'mit Erfolgen und dem letzten Spieldatum.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 10),
+        FilledButton.icon(
+          onPressed: _xboxSignIn,
+          icon: const Icon(Icons.login),
+          label: const Text('Mit Microsoft anmelden'),
+        ),
+      ],
+      if (xbox.errorMessage != null) ...[
+        const SizedBox(height: 8),
+        Text(
+          xbox.errorMessage!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
+    ];
+  }
+
+  Future<void> _connectPlaystation() async {
+    final npsso = _npssoController.text.trim();
+    if (npsso.isEmpty) return;
+    final playstation = context.read<PlaystationState>();
+    final library = context.read<LibraryState>();
+    final error = await playstation.connect(npsso);
+    if (error == null) {
+      _npssoController.clear();
+      library.setPlaystationGames(playstation.games);
+    }
+  }
+
+  Future<void> _disconnectPlaystation() async {
+    final playstation = context.read<PlaystationState>();
+    final library = context.read<LibraryState>();
+    await playstation.disconnect();
+    library.setPlaystationGames(const []);
+  }
+
+  List<Widget> _buildPlaystationSectionChildren(
+    PlaystationState playstation,
+    SyncState sync,
+  ) {
+    if (!Platform.isWindows) {
+      final syncedCount = sync.syncedPlaystationGames.length;
+      return [
+        Text(
+          syncedCount > 0
+              ? '$syncedCount Spiele wurden von deinem Windows-PC über '
+                    'Cloud-Sync übertragen.'
+              : 'Verbinde PlayStation in GameZer auf deinem Windows-PC. Die '
+                    'Spiele erscheinen dann hier über Cloud-Sync.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ];
+    }
+
+    if (playstation.isConnected) {
+      return [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.check_circle, color: Colors.green),
+          title: Text(
+            playstation.onlineId != null
+                ? 'Verbunden als ${playstation.onlineId}'
+                : 'Verbunden',
+          ),
+          subtitle: Text(
+            '${playstation.games.length} PS4-/PS5-Spiele mit Spielzeit',
+          ),
+          trailing: IconButton(
+            tooltip: 'Trennen',
+            icon: const Icon(Icons.link_off),
+            onPressed: _disconnectPlaystation,
+          ),
+        ),
+      ];
+    }
+
+    Widget step(String number, String text, {String? url, String? label}) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 22,
+                child: Text(
+                  number,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(text, style: Theme.of(context).textTheme.bodyMedium),
+                    if (url != null)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                        onPressed: () => launchUrl(
+                          Uri.parse(url),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: Text(label ?? url),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return [
+      Text(
+        'Sony bietet keine offizielle Schnittstelle. GameZer nutzt deshalb '
+        'denselben Weg wie die PlayStation-App (inoffiziell – kann sich '
+        'jederzeit ändern). Du siehst alle PS4-/PS5-Spiele, die du gespielt '
+        'hast, mit Spielzeit.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: 12),
+      step(
+        '1.',
+        'Im Browser bei PlayStation anmelden.',
+        url: 'https://www.playstation.com/',
+        label: 'playstation.com öffnen',
+      ),
+      step(
+        '2.',
+        'Diese Seite öffnen und den Wert hinter "npsso" kopieren (64 '
+            'Zeichen, ohne Anführungszeichen). Behandle ihn wie ein Passwort.',
+        url: 'https://ca.account.sony.com/api/v1/ssocookie',
+        label: 'NPSSO-Code anzeigen',
+      ),
+      step('3.', 'Den Code hier einfügen:'),
+      TextField(
+        controller: _npssoController,
+        obscureText: true,
+        decoration: const InputDecoration(
+          labelText: 'NPSSO-Code',
+          isDense: true,
+        ),
+        onSubmitted: (_) => _connectPlaystation(),
+      ),
+      const SizedBox(height: 10),
+      FilledButton(
+        onPressed: playstation.isLoading ? null : _connectPlaystation,
+        child: playstation.isLoading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Verbinden'),
+      ),
+      if (playstation.errorMessage != null) ...[
+        const SizedBox(height: 8),
+        Text(
+          playstation.errorMessage!,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ],
+    ];
+  }
+
   List<Widget> _buildEpicSectionChildren(EpicState epic, SyncState sync) {
     final syncedCount = sync.syncedEpicGames.length;
 
@@ -761,6 +1106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({
     required this.icon,
+    this.platform,
     required this.title,
     required this.children,
     this.status,
@@ -768,6 +1114,9 @@ class _SettingsSection extends StatelessWidget {
   });
 
   final IconData icon;
+
+  /// When set, the store's brand logo replaces [icon].
+  final GamePlatform? platform;
   final String title;
   final Widget? status;
   final bool initiallyExpanded;
@@ -782,7 +1131,13 @@ class _SettingsSection extends StatelessWidget {
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           initiallyExpanded: initiallyExpanded,
-          leading: Icon(icon),
+          leading: platform != null
+              ? PlatformLogo(
+                  platform!,
+                  size: 22,
+                  color: Theme.of(context).colorScheme.onSurface,
+                )
+              : Icon(icon),
           title: Text(title),
           trailing: status == null
               ? const Icon(Icons.expand_more)

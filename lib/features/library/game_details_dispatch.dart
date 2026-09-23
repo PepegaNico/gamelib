@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import '../../core/epic/epic_game.dart';
 import '../../core/itchio/itchio_game.dart';
 import '../../core/models/library_game.dart';
+import '../../core/playstation/playstation_game.dart';
 import '../../core/steam/steam_game.dart';
+import '../../core/xbox/xbox_game.dart';
 import 'epic_game_details_screen.dart';
 import 'game_details_screen.dart';
 import 'itchio_game_details_screen.dart';
+import 'playstation_game_details_screen.dart';
+import 'xbox_game_details_screen.dart';
 
 /// Opens the right detail screen for whichever store [game] came from.
 void pushGameDetails(BuildContext context, LibraryGame game) {
@@ -20,6 +24,16 @@ void pushGameDetails(BuildContext context, LibraryGame game) {
   } else if (game is EpicGame) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => EpicGameDetailsScreen(game: game)),
+    );
+  } else if (game is XboxGame) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => XboxGameDetailsScreen(game: game)),
+    );
+  } else if (game is PlaystationGame) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PlaystationGameDetailsScreen(game: game),
+      ),
     );
   }
 }

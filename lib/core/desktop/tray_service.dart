@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
+
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
-/// Adds a Windows system-tray icon so GameLib can keep running in the
+/// Adds a Windows system-tray icon so GameZer can keep running in the
 /// background: closing the window hides it instead of quitting, with a
 /// tray menu to reopen or fully exit. No-op on every other platform.
 class TrayService with TrayListener, WindowListener {
@@ -18,6 +20,12 @@ class TrayService with TrayListener, WindowListener {
 
     await windowManager.ensureInitialized();
     await windowManager.setPreventClose(true);
+    // Native frame off — ZerTitleBar draws its own (see title_bar.dart).
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+    );
+    await windowManager.setMinimumSize(const Size(960, 600));
     windowManager.addListener(this);
 
     trayManager.addListener(this);

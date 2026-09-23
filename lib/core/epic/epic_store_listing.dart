@@ -5,6 +5,9 @@ class EpicStoreListing {
   final String? developerName;
   final List<String> categoryPaths;
   final String? imageUrl;
+
+  /// Portrait box art (DieselGameBoxTall / OfferImageTall), if any.
+  final String? tallImageUrl;
   final String productSlug;
   final int? originalPriceCents;
   final int? discountPriceCents;
@@ -17,6 +20,7 @@ class EpicStoreListing {
     required this.developerName,
     required this.categoryPaths,
     required this.imageUrl,
+    this.tallImageUrl,
     required this.productSlug,
     required this.originalPriceCents,
     required this.discountPriceCents,
@@ -29,6 +33,11 @@ class EpicStoreListing {
     final preferredImage = images.firstWhere(
       (img) => (img['type'] as String?)?.contains('Wide') ?? false,
       orElse: () => images.isNotEmpty ? images.first : <String, dynamic>{},
+    );
+
+    final tallImage = images.firstWhere(
+      (img) => (img['type'] as String?)?.contains('Tall') ?? false,
+      orElse: () => <String, dynamic>{},
     );
 
     final price = json['price'] as Map<String, dynamic>?;
@@ -53,6 +62,7 @@ class EpicStoreListing {
           (json['seller'] as Map<String, dynamic>?)?['name'] as String?,
       categoryPaths: categories,
       imageUrl: preferredImage['url'] as String?,
+      tallImageUrl: tallImage['url'] as String?,
       productSlug:
           (json['productSlug'] as String?) ??
           (json['urlSlug'] as String?) ??

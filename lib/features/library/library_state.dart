@@ -3,12 +3,14 @@ import 'package:flutter/foundation.dart';
 import '../../core/epic/epic_game.dart';
 import '../../core/epic/epic_store_api_service.dart';
 import '../../core/itchio/itchio_game.dart';
+import '../../core/playstation/playstation_game.dart';
 import '../../core/models/library_game.dart';
 import '../../core/steam/steam_account.dart';
 import '../../core/steam/steam_app_details.dart';
 import '../../core/steam/steam_game.dart';
 import '../../core/steam/steam_store_api_service.dart';
 import '../../core/steam/steam_web_api_service.dart';
+import '../../core/xbox/xbox_game.dart';
 
 class LibraryState extends ChangeNotifier {
   LibraryState({
@@ -28,11 +30,15 @@ class LibraryState extends ChangeNotifier {
   List<SteamGame> _steamGames = [];
   List<ItchioGame> _itchioGames = [];
   List<EpicGame> _epicGames = [];
+  List<XboxGame> _xboxGames = [];
+  List<PlaystationGame> _playstationGames = [];
 
   List<LibraryGame> get games => [
     ..._steamGames,
     ..._itchioGames,
     ..._epicGames,
+    ..._xboxGames,
+    ..._playstationGames,
   ];
   List<SteamGame> get steamGames => _steamGames;
 
@@ -111,6 +117,18 @@ class LibraryState extends ChangeNotifier {
 
   void setEpicGames(List<EpicGame> games) {
     _epicGames = games;
+    if (errorMessage != null && this.games.isNotEmpty) errorMessage = null;
+    notifyListeners();
+  }
+
+  void setXboxGames(List<XboxGame> games) {
+    _xboxGames = games;
+    if (errorMessage != null && this.games.isNotEmpty) errorMessage = null;
+    notifyListeners();
+  }
+
+  void setPlaystationGames(List<PlaystationGame> games) {
+    _playstationGames = games;
     if (errorMessage != null && this.games.isNotEmpty) errorMessage = null;
     notifyListeners();
   }

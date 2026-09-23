@@ -19,6 +19,8 @@ class FirestoreSyncService {
   static const _dataField = 'data';
   static const _epicLibraryField = 'epicLibrary';
   static const _wishlistField = 'wishlist';
+  static const _xboxLibraryField = 'xboxLibrary';
+  static const _playstationLibraryField = 'playstationLibrary';
 
   static String _docUrl(String uid) =>
       'https://firestore.googleapis.com/v1/projects/${FirebaseConfig.projectId}'
@@ -49,6 +51,46 @@ class FirestoreSyncService {
     required String idToken,
     required String uid,
   }) => _downloadField(idToken: idToken, uid: uid, field: _epicLibraryField);
+
+  /// Same one-way snapshot as [uploadEpicLibrary], for locally installed
+  /// Xbox app / Microsoft Store games.
+  Future<void> uploadXboxLibrary({
+    required String idToken,
+    required String uid,
+    required String payloadJson,
+  }) => _uploadField(
+    idToken: idToken,
+    uid: uid,
+    field: _xboxLibraryField,
+    value: payloadJson,
+  );
+
+  Future<String?> downloadXboxLibrary({
+    required String idToken,
+    required String uid,
+  }) => _downloadField(idToken: idToken, uid: uid, field: _xboxLibraryField);
+
+  /// Same one-way snapshot for the PlayStation account's played games —
+  /// PSN is only connected on Windows.
+  Future<void> uploadPlaystationLibrary({
+    required String idToken,
+    required String uid,
+    required String payloadJson,
+  }) => _uploadField(
+    idToken: idToken,
+    uid: uid,
+    field: _playstationLibraryField,
+    value: payloadJson,
+  );
+
+  Future<String?> downloadPlaystationLibrary({
+    required String idToken,
+    required String uid,
+  }) => _downloadField(
+    idToken: idToken,
+    uid: uid,
+    field: _playstationLibraryField,
+  );
 
   Future<void> uploadWishlist({
     required String idToken,

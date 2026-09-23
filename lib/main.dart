@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
+import 'core/desktop/title_bar.dart';
 import 'core/desktop/tray_service.dart';
 import 'core/notifications/background_price_check.dart';
 import 'core/widgets/build_banner.dart';
@@ -12,12 +13,14 @@ import 'features/auth/auth_state.dart';
 import 'features/auth/login_screen.dart';
 import 'features/epic/epic_state.dart';
 import 'features/itchio/itchio_state.dart';
-import 'features/library/library_screen.dart';
 import 'features/library/library_state.dart';
+import 'features/playstation/playstation_state.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/shell/app_shell.dart';
 import 'features/sync/sync_state.dart';
 import 'features/updates/updates_state.dart';
 import 'features/wishlist/wishlist_state.dart';
+import 'features/xbox/xbox_state.dart';
 
 /// Runs when iOS relaunches the app headlessly (fully terminated) just to
 /// perform a background fetch — must stay a top-level function so it
@@ -75,6 +78,8 @@ class GameLibApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => UpdatesState()),
         ChangeNotifierProvider(create: (_) => ItchioState()..restore()),
         ChangeNotifierProvider(create: (_) => EpicState()),
+        ChangeNotifierProvider(create: (_) => XboxState()),
+        ChangeNotifierProvider(create: (_) => PlaystationState()),
         ChangeNotifierProvider(create: (_) => WishlistState()..restore()),
         ChangeNotifierProvider(create: (_) => SyncState()..restore()),
       ],
@@ -83,8 +88,14 @@ class GameLibApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         home: const _RootScreen(),
-        builder: (context, child) =>
-            BuildBanner(child: child ?? const SizedBox.shrink()),
+        builder: (context, child) => Column(
+          children: [
+            const ZerTitleBar(),
+            Expanded(
+              child: BuildBanner(child: child ?? const SizedBox.shrink()),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -105,7 +116,7 @@ class _RootScreen extends StatelessWidget {
       case AuthStatus.needsLogin:
         return const LoginScreen();
       case AuthStatus.signedIn:
-        return const LibraryScreen();
+        return const AppShell();
     }
   }
 }

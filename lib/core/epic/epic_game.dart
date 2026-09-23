@@ -33,6 +33,7 @@ class EpicGame implements LibraryGame {
   String? installedAppName;
 
   String? resolvedImageUrl;
+  String? resolvedTallImageUrl;
   String? resolvedDescription;
   String? resolvedDeveloper;
   List<String> resolvedCategories = [];
@@ -76,6 +77,10 @@ class EpicGame implements LibraryGame {
       (img) => (img['type'] as String?) == 'DieselGameBox',
       orElse: () => images.isNotEmpty ? images.first : <String, dynamic>{},
     );
+    final tallImage = images.firstWhere(
+      (img) => (img['type'] as String?) == 'DieselGameBoxTall',
+      orElse: () => <String, dynamic>{},
+    );
     final categories =
         (metadata['categories'] as List?)
             ?.cast<Map<String, dynamic>>()
@@ -95,6 +100,7 @@ class EpicGame implements LibraryGame {
         viaLegendary: true,
       )
       ..resolvedImageUrl = preferredImage['url'] as String?
+      ..resolvedTallImageUrl = tallImage['url'] as String?
       ..resolvedDeveloper = metadata['developer'] as String?
       ..resolvedCategories = categories;
   }
@@ -104,6 +110,7 @@ class EpicGame implements LibraryGame {
   /// title-search match is fuzzier than Legendary's own exact metadata.
   void applyStoreListing(EpicStoreListing listing) {
     resolvedImageUrl ??= listing.imageUrl;
+    resolvedTallImageUrl ??= listing.tallImageUrl;
     resolvedDescription = listing.description;
     if (listing.developerName != null) {
       resolvedDeveloper = listing.developerName;
@@ -126,6 +133,7 @@ class EpicGame implements LibraryGame {
     'namespace': namespace,
     'catalogItemId': catalogItemId,
     'resolvedImageUrl': resolvedImageUrl,
+    'resolvedTallImageUrl': resolvedTallImageUrl,
     'resolvedDescription': resolvedDescription,
     'resolvedDeveloper': resolvedDeveloper,
     'resolvedCategories': resolvedCategories,
@@ -140,6 +148,7 @@ class EpicGame implements LibraryGame {
         catalogItemId: json['catalogItemId'] as String?,
       )
       ..resolvedImageUrl = json['resolvedImageUrl'] as String?
+      ..resolvedTallImageUrl = json['resolvedTallImageUrl'] as String?
       ..resolvedDescription = json['resolvedDescription'] as String?
       ..resolvedDeveloper = json['resolvedDeveloper'] as String?
       ..resolvedCategories =
@@ -158,6 +167,12 @@ class EpicGame implements LibraryGame {
   String get headerImageUrl => resolvedImageUrl ?? '';
 
   @override
+  String get coverImageUrl => resolvedTallImageUrl ?? headerImageUrl;
+
+  @override
+  bool get coverIsPortrait => resolvedTallImageUrl != null;
+
+  @override
   String get storePageUrl => resolvedProductSlug != null
       ? 'https://store.epicgames.com/en-US/p/$resolvedProductSlug'
       : 'https://store.epicgames.com/en-US/browse?q=${Uri.encodeComponent(name)}';
@@ -173,6 +188,10 @@ class EpicGame implements LibraryGame {
 
   @override
   DateTime? get lastPlayed => null;
+
+  /// Installed via the launcher, or launchable through legendary.
+  @override
+  bool get canLaunch => isInstalled || viaLegendary;
 
   @override
   String get primaryActionLabel => 'Spiel starten';
