@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../app_theme.dart';
 import '../../core/models/game_platform.dart';
 import '../../core/models/library_game.dart';
+import '../../core/playtracking/play_tracker.dart';
 import '../../core/steam/steam_app_details.dart';
 import '../../core/steam/steam_game.dart';
 import '../../core/wishlist/wishlist_entry.dart';
@@ -67,7 +68,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Push newly recorded play time to the iPhone as soon as a game closes.
+      context.read<PlayTracker>().onSessionEnded = _syncPlayData;
+      _refresh();
+    });
+  }
+
+  Future<void> _syncPlayData() async {
+    final sync = context.read<SyncState>();
+    if (sync.status != SyncStatus.loggedIn) return;
+    await sync.sync(
+      auth: context.read<AuthState>(),
+      itchio: context.read<ItchioState>(),
+      wishlist: context.read<WishlistState>(),
+      epic: context.read<EpicState>(),
+      xbox: context.read<XboxState>(),
+      playstation: context.read<PlaystationState>(),
+    );
   }
 
   @override
@@ -128,6 +146,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ? playstation.games
           : sync.syncedPlaystationGames,
     );
+    context.read<PlayTracker>().watch(library.games);
     unawaited(context.read<UpdatesState>().checkForUpdates(library.steamGames));
     unawaited(library.prefetchAppDetails());
     unawaited(library.prefetchEpicDetails());
@@ -218,6 +237,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryState>();
+    // Rebuild when a tracked game's last-played / playtime changes.
+    context.watch<PlayTracker>();
     final wishlist = context.watch<WishlistState>();
     final filtered = _applyFiltersAndSort(
       library.games,

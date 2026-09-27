@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
 import 'core/desktop/title_bar.dart';
+import 'core/playtracking/play_tracker.dart';
 import 'core/desktop/tray_service.dart';
 import 'core/notifications/background_price_check.dart';
 import 'core/widgets/build_banner.dart';
@@ -80,6 +81,7 @@ class GameLibApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => EpicState()),
         ChangeNotifierProvider(create: (_) => XboxState()),
         ChangeNotifierProvider(create: (_) => PlaystationState()),
+        ChangeNotifierProvider(create: (_) => PlayTracker()..start()),
         ChangeNotifierProvider(create: (_) => WishlistState()..restore()),
         ChangeNotifierProvider(create: (_) => SyncState()..restore()),
       ],

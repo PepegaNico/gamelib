@@ -65,6 +65,7 @@ class EpicState extends ChangeNotifier {
         if (installed != null) {
           game.isInstalled = true;
           game.installedAppName = installed.installedAppName;
+          game.installLocation = installed.installLocation;
         }
       }
       games = owned;

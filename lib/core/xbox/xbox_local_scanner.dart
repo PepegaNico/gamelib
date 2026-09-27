@@ -54,6 +54,7 @@ ConvertTo-Json -InputObject $result -Compress -Depth 3
           XboxGame(
             packageFamilyName: family,
             appId: appIds.first,
+            installLocation: entry['location'] as String?,
             name:
                 await _displayName(entry['location'] as String?) ??
                 (entry['name'] as String? ?? family),
