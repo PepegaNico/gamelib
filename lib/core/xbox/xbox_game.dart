@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../models/game_platform.dart';
 import '../models/library_game.dart';
+import '../playtracking/trackable_game.dart';
 
 /// An Xbox game — from one or both of two sources:
 /// - installed locally on this PC through the Xbox app / Microsoft Store
@@ -10,7 +11,7 @@ import '../models/library_game.dart';
 ///   which covers consoles and cloud too and adds last-played and
 ///   achievement progress.
 /// XboxState merges both by package family name.
-class XboxGame implements LibraryGame {
+class XboxGame implements LibraryGame, TrackableGame {
   /// Set for PC/Store titles; console-only titles have none.
   final String? packageFamilyName;
 
@@ -42,6 +43,14 @@ class XboxGame implements LibraryGame {
   /// e.g. ["XboxSeries", "PC"].
   List<String> devices;
 
+  /// Package install folder on this PC (installed games only).
+  final String? installLocation;
+
+  /// Recorded by PlayTracker while the installed game runs (Xbox Live
+  /// reports no minutes), or synced from the PC.
+  DateTime? trackedLastPlayed;
+  int trackedMinutes;
+
   XboxGame({
     this.packageFamilyName,
     this.titleId,
@@ -59,6 +68,9 @@ class XboxGame implements LibraryGame {
     this.gamerscoreEarned,
     this.gamerscoreTotal,
     this.devices = const [],
+    this.installLocation,
+    this.trackedLastPlayed,
+    this.trackedMinutes = 0,
   });
 
   factory XboxGame.fromTitleHub(Map<String, dynamic> json) {
@@ -130,6 +142,9 @@ class XboxGame implements LibraryGame {
     gamerscoreEarned: cloud.gamerscoreEarned,
     gamerscoreTotal: cloud.gamerscoreTotal,
     devices: cloud.devices,
+    installLocation: installLocation,
+    trackedLastPlayed: trackedLastPlayed,
+    trackedMinutes: trackedMinutes,
   );
 
   bool get hasAchievements => (achievementsTotal ?? 0) > 0;
@@ -155,18 +170,33 @@ class XboxGame implements LibraryGame {
       : 'https://www.xbox.com/de-CH/search?q=${Uri.encodeComponent(name)}';
 
   @override
-  bool get hasPlaytimeData => false;
+  bool get hasPlaytimeData => trackedMinutes > 0;
 
   @override
-  double get playtimeForeverHours => 0;
+  double get playtimeForeverHours => trackedMinutes / 60;
 
   /// Xbox doesn't report minutes played here, but a title only appears in
   /// the history once it has been started.
   @override
-  bool get hasBeenPlayed => lastPlayedAt != null;
+  bool get hasBeenPlayed => lastPlayed != null;
 
   @override
-  DateTime? get lastPlayed => lastPlayedAt;
+  DateTime? get lastPlayed {
+    final cloud = lastPlayedAt;
+    final tracked = trackedLastPlayed;
+    if (cloud == null) return tracked;
+    if (tracked == null) return cloud;
+    return tracked.isAfter(cloud) ? tracked : cloud;
+  }
+
+  @override
+  String? get installDirectory => isInstalled ? installLocation : null;
+
+  @override
+  void applyTrackedPlay({required DateTime lastPlayed, required int minutes}) {
+    trackedLastPlayed = lastPlayed;
+    trackedMinutes = minutes;
+  }
 
   @override
   bool get canLaunch => isInstalled && appId != null;
@@ -203,7 +233,8 @@ class XboxGame implements LibraryGame {
     'heroUrl': heroUrl,
     'description': description,
     'developer': developer,
-    'lastPlayed': lastPlayedAt?.toUtc().toIso8601String(),
+    'lastPlayed': lastPlayed?.toUtc().toIso8601String(),
+    'playtimeMinutes': trackedMinutes,
     'achievementsEarned': achievementsEarned,
     'achievementsTotal': achievementsTotal,
     'gamerscoreEarned': gamerscoreEarned,
@@ -229,5 +260,6 @@ class XboxGame implements LibraryGame {
     gamerscoreEarned: (json['gamerscoreEarned'] as num?)?.toInt(),
     gamerscoreTotal: (json['gamerscoreTotal'] as num?)?.toInt(),
     devices: ((json['devices'] as List?) ?? []).cast<String>(),
+    trackedMinutes: (json['playtimeMinutes'] as num?)?.toInt() ?? 0,
   );
 }

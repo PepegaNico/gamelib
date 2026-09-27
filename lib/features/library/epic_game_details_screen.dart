@@ -65,6 +65,13 @@ class _EpicGameDetailsScreenState extends State<EpicGameDetailsScreen> {
                 game.isInstalled
                     ? (Icons.check_circle_outline, 'Installiert')
                     : (Icons.cloud_outlined, 'Nicht installiert'),
+                if (game.hasPlaytimeData)
+                  (
+                    Icons.schedule,
+                    '${game.playtimeForeverHours.toStringAsFixed(1)} h gespielt',
+                  ),
+                if (game.lastPlayed != null)
+                  (Icons.event, 'Zuletzt ${_formatDate(game.lastPlayed!)}'),
                 if (game.resolvedDeveloper != null)
                   (Icons.code_rounded, game.resolvedDeveloper!),
               ],
@@ -187,3 +194,6 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
+
+String _formatDate(DateTime date) =>
+    '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';

@@ -27,8 +27,13 @@ class XboxGameDetailsScreen extends StatelessWidget {
                 game.isInstalled
                     ? (Icons.check_circle_outline, 'Installiert')
                     : (Icons.cloud_outlined, 'Nicht auf diesem PC'),
-                if (game.lastPlayedAt != null)
-                  (Icons.event, 'Zuletzt ${_formatDate(game.lastPlayedAt!)}'),
+                if (game.hasPlaytimeData)
+                  (
+                    Icons.schedule,
+                    '${game.playtimeForeverHours.toStringAsFixed(1)} h gespielt',
+                  ),
+                if (game.lastPlayed != null)
+                  (Icons.event, 'Zuletzt ${_formatDate(game.lastPlayed!)}'),
                 if (game.hasAchievements)
                   (
                     Icons.emoji_events_outlined,

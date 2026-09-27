@@ -1,5 +1,6 @@
 import '../models/game_platform.dart';
 import '../models/library_game.dart';
+import '../playtracking/trackable_game.dart';
 import 'epic_store_listing.dart';
 
 /// Neither the local Epic manifest files nor Legendary's `list --json`
@@ -8,7 +9,7 @@ import 'epic_store_listing.dart';
 /// [LibraryState.prefetchEpicDetails] and [EpicGameDetailsScreen]) by
 /// searching Epic's public store catalog for the exact title — until then
 /// the UI falls back to a styled placeholder card and generic search link.
-class EpicGame implements LibraryGame {
+class EpicGame implements LibraryGame, TrackableGame {
   final String appName;
   @override
   final String name;
@@ -32,6 +33,15 @@ class EpicGame implements LibraryGame {
   bool isInstalled;
   String? installedAppName;
 
+  /// Install folder from the launcher manifest — lets PlayTracker notice
+  /// when the game is running.
+  String? installLocation;
+
+  /// Recorded by PlayTracker on the PC (Epic reports neither), or synced
+  /// from there.
+  DateTime? trackedLastPlayed;
+  int trackedMinutes = 0;
+
   String? resolvedImageUrl;
   String? resolvedTallImageUrl;
   String? resolvedDescription;
@@ -48,6 +58,7 @@ class EpicGame implements LibraryGame {
     this.viaLegendary = false,
     this.isInstalled = false,
     this.installedAppName,
+    this.installLocation,
   });
 
   factory EpicGame.fromManifestJson(Map<String, dynamic> json) {
@@ -59,6 +70,7 @@ class EpicGame implements LibraryGame {
       catalogItemId: json['CatalogItemId'] as String?,
       isInstalled: true,
       installedAppName: appName,
+      installLocation: json['InstallLocation'] as String?,
     );
   }
 
@@ -138,6 +150,8 @@ class EpicGame implements LibraryGame {
     'resolvedDeveloper': resolvedDeveloper,
     'resolvedCategories': resolvedCategories,
     'resolvedProductSlug': resolvedProductSlug,
+    'lastPlayed': trackedLastPlayed?.toUtc().toIso8601String(),
+    'playtimeMinutes': trackedMinutes,
   };
 
   factory EpicGame.fromSyncJson(Map<String, dynamic> json) {
@@ -154,6 +168,10 @@ class EpicGame implements LibraryGame {
       ..resolvedCategories =
           (json['resolvedCategories'] as List?)?.cast<String>() ?? []
       ..resolvedProductSlug = json['resolvedProductSlug'] as String?
+      ..trackedLastPlayed = DateTime.tryParse(
+        (json['lastPlayed'] as String?) ?? '',
+      )?.toLocal()
+      ..trackedMinutes = (json['playtimeMinutes'] as num?)?.toInt() ?? 0
       ..storeDetailsFetched = true;
   }
 
@@ -178,16 +196,25 @@ class EpicGame implements LibraryGame {
       : 'https://store.epicgames.com/en-US/browse?q=${Uri.encodeComponent(name)}';
 
   @override
-  bool get hasPlaytimeData => false;
+  bool get hasPlaytimeData => trackedMinutes > 0;
 
   @override
-  double get playtimeForeverHours => 0;
+  double get playtimeForeverHours => trackedMinutes / 60;
 
   @override
-  bool get hasBeenPlayed => false;
+  bool get hasBeenPlayed => trackedMinutes > 0;
 
   @override
-  DateTime? get lastPlayed => null;
+  DateTime? get lastPlayed => trackedLastPlayed;
+
+  @override
+  String? get installDirectory => isInstalled ? installLocation : null;
+
+  @override
+  void applyTrackedPlay({required DateTime lastPlayed, required int minutes}) {
+    trackedLastPlayed = lastPlayed;
+    trackedMinutes = minutes;
+  }
 
   /// Installed via the launcher, or launchable through legendary.
   @override
